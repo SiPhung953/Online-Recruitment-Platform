@@ -27,3 +27,11 @@ export function assertEmployer(currentUser: CurrentUser): void {
         "Only Employer can perform this action."
     )
 }
+
+export function assertAdmin(currentUser: CurrentUser): void {
+    assertRole(
+        currentUser,
+        RoleConstant.ADMIN,
+        "Only Admin can perform this action."
+    )
+}
