@@ -70,10 +70,11 @@ model Job {
   createdAt           DateTime       @default(now()) @map("created_at")
   updatedAt           DateTime       @updatedAt @map("updated_at")
   closedAt            DateTime?      @map("closed_at")
-  deletedAt           DateTime?      @map("deleted_at")
   approvedAt          DateTime?      @map("approved_at")
   rejectedAt          DateTime?      @map("rejected_at")
   rejectionReason     String?        @map("rejection_reason")
+  deletedAt           DateTime?      @map("deleted_at")
+  deletionReason      String?        @map("deletion_reason")
 
   createdByEmployer User          @relation(fields: [createdByEmployerId], references: [id])
   company           Company       @relation(fields: [companyId], references: [id])
