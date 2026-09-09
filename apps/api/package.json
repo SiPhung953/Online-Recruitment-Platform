@@ -6,7 +6,6 @@
   "scripts": {
     "predev": "tsoa spec-and-routes",
     "prebuild": "shx rm -rf dist && shx rm -f tsconfig.tsbuildinfo",
-    
     "dev": "tsx watch src/server.ts",
     "build": "tsoa spec-and-routes && tsc && shx mkdir -p dist/email/templates && shx cp -r src/email/templates/. dist/email/templates/",
     "start": "node dist/server.js",
@@ -31,6 +30,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -39,8 +39,11 @@
     "@types/node": "^24.12.4",
     "@types/nodemailer": "^8.0.0",
     "@types/swagger-ui-express": "^4.1.8",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
     "prisma": "^7.8.0",
     "shx": "^0.4.0",
-    "tsx": "^4.22.3"
+    "tsx": "^4.22.3",
+    "typescript-eslint": "^8.60.0"
   }
 }
