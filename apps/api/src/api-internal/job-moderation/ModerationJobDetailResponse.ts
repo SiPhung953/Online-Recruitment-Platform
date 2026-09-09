@@ -12,8 +12,9 @@ export interface ModerationJobDetailResponse {
     deadline: Date;
     createdAt: Date;
     updatedAt: Date;
-    deletedAt?: Date;
     approvedAt?: Date;
+    deletedAt?: Date;
+    deletionReason?: string;
     rejectedAt?: Date;
     rejectionReason?: string;
 
