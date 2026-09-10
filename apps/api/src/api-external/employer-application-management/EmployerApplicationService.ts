@@ -3,6 +3,8 @@ import { HttpError } from '../../utils/HttpError';
 import { assertEmployer } from '../../api-shared/guard/AssertRole';
 
 import { CurrentUser } from '../../security/CurrentAuthenticatedUser';
+import { AuditLogger } from '../../logging/AuditLogger';
+import { ApplicationUnderReview, ApplicationStatusUpdated } from '../../logging/LogMessages';
 import { EmployerApplicationListResponse } from './EmployerApplicationListResponse';
 import { EmployerApplicationResponse } from './EmployerApplicationResponse';
 import { PutApplicationUnderReviewResponse } from './PutApplicationUnderReviewResponse';
@@ -10,6 +12,8 @@ import { UpdateApplicationStatusRequest } from './UpdateApplicationStatusRequest
 import { UpdateApplicationStatusResponse } from './UpdateApplicationStatusResponse';
 
 export class EmployerApplicationService {
+    private readonly auditLogger = new AuditLogger();
+
     // Helper function for querying owned application
     private async findOwnedApplication(
         currentUser: CurrentUser,
@@ -203,15 +207,26 @@ export class EmployerApplicationService {
             throw new HttpError(400, "Only a submitted application can be put under review.")
         }
 
-        // 4. Update the application status
-        const reviewedApplication = await prisma.application.update({
-            where: {
-                id: applicationId,
-            },
-            data: {
-                status: "UNDER_REVIEW",
-                underReviewAt: new Date(),
-            },
+        // 4. Update the application status and write the audit log in one transaction
+        const reviewedApplication = await prisma.$transaction(async (tx) => {
+            const updated = await tx.application.update({
+                where: {
+                    id: applicationId,
+                },
+                data: {
+                    status: "UNDER_REVIEW",
+                    underReviewAt: new Date(),
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "APPLICATION_UNDER_REVIEW",
+                targetId: applicationId,
+                message: ApplicationUnderReview(application.job.title),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         // 5. Return
@@ -255,25 +270,36 @@ export class EmployerApplicationService {
             }
         }
 
-        // 5. Update database
+        // 5. Update database and write the audit log in one transaction
         const isRejected = requestBody.decision === "REJECTED";
-        const updatedApplication = await prisma.application.update({
-            where: {
-                id: applicationId,
-            },
-            data: {
-                status: requestBody.decision,
-                decidedAt: new Date(),
-                ...(isRejected && { rejectionReason: trimmedReason }),
-                // This is JS conditional spreading
-                // When isRejected = true, the expression will be resolved to { rejectionReason: trimmedReason }, and then spread by ...
-                // When isRejected = false, the expression will be evaluated to false, then spread into the data object, and the rejection reason will not be included.
-            },
-            select: {
-                id: true,
-                decidedAt: true,
-                rejectionReason: true,
-            },
+        const updatedApplication = await prisma.$transaction(async (tx) => {
+            const updated = await tx.application.update({
+                where: {
+                    id: applicationId,
+                },
+                data: {
+                    status: requestBody.decision,
+                    decidedAt: new Date(),
+                    ...(isRejected && { rejectionReason: trimmedReason }),
+                    // This is JS conditional spreading
+                    // When isRejected = true, the expression will be resolved to { rejectionReason: trimmedReason }, and then spread by ...
+                    // When isRejected = false, the expression will be evaluated to false, then spread into the data object, and the rejection reason will not be included.
+                },
+                select: {
+                    id: true,
+                    decidedAt: true,
+                    rejectionReason: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "APPLICATION_STATUS_UPDATED",
+                targetId: applicationId,
+                message: ApplicationStatusUpdated(application.job.title, application.status, requestBody.decision),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         // 6. Return

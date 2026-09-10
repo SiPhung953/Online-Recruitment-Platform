@@ -3,6 +3,8 @@ import { HttpError } from '../../utils/HttpError';
 import { FileStorageService } from '../../utils/FileStorageService';
 import { CurrentUser } from '../../security/CurrentAuthenticatedUser';
 import { assertJobSeeker } from '../../api-shared/guard/AssertRole';
+import { AuditLogger } from '../../logging/AuditLogger';
+import { ResumeUploaded, ResumeDeleted } from '../../logging/LogMessages';
 
 import { UploadResumeResponse } from './UploadResumeResponse';
 import { GetMyResumeResponse } from './GetMyResumesResponse';
@@ -23,6 +25,7 @@ function isAllowedMimeType(mimeType: string): mimeType is MimeFileType {
 
 export class ResumeService {
     private readonly fileStorageService = new FileStorageService();
+    private readonly auditLogger = new AuditLogger();
 
     public async getMyResumes(currentUser: CurrentUser): Promise<GetMyResumeResponse> {
         // 1. Assert current user is a job seeker
@@ -85,23 +88,34 @@ export class ResumeService {
         // Save the file using FileStorageService
         const fileUrl = await this.fileStorageService.saveCv(resumeFile);
         
-        // Create resume in the database
-        const resume = await prisma.resume.create({
-            data: {
-                userId: currentUser.id,
-                title: resumeTitle.trim(),
-                fileUrl,
-                fileSize: resumeFile.size,
-                fileType,
-            },
-            select: {
-                id: true,
-                title: true,
-                fileUrl: true,
-                fileType: true,
-                fileSize: true,
-                uploadedAt: true,
-            },
+        // Create the resume and write the audit log in one transaction
+        const resume = await prisma.$transaction(async (tx) => {
+            const created = await tx.resume.create({
+                data: {
+                    userId: currentUser.id,
+                    title: resumeTitle.trim(),
+                    fileUrl,
+                    fileSize: resumeFile.size,
+                    fileType,
+                },
+                select: {
+                    id: true,
+                    title: true,
+                    fileUrl: true,
+                    fileType: true,
+                    fileSize: true,
+                    uploadedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "RESUME_UPLOADED",
+                targetId: created.id,
+                message: ResumeUploaded(created.title),
+                actor: currentUser,
+            });
+
+            return created;
         });
 
         return {
@@ -121,6 +135,7 @@ export class ResumeService {
             select: {
                 id: true,
                 userId: true,
+                title: true,
                 deletedAt: true,
                 fileUrl: true,
                 applications: {
@@ -142,13 +157,22 @@ export class ResumeService {
         // If the resume is already used in an application, prevent hard delete
         const isUsedInApplication = resume.applications.length > 0;
         
-        // but instead mark it as deleted (soft delete)
+        // but instead mark it as deleted (soft delete) and write the audit log in one transaction
         if (isUsedInApplication) {
-            await prisma.resume.update({
-                where: { id: resumeId },
-                data: {
-                    deletedAt: new Date(),
-                },
+            await prisma.$transaction(async (tx) => {
+                await tx.resume.update({
+                    where: { id: resumeId },
+                    data: {
+                        deletedAt: new Date(),
+                    },
+                });
+
+                await this.auditLogger.log(tx, {
+                    action: "RESUME_DELETED",
+                    targetId: resumeId,
+                    message: ResumeDeleted(resume.title),
+                    actor: currentUser,
+                });
             });
 
             return {
@@ -156,9 +180,18 @@ export class ResumeService {
             }
         }
             
-        // else, hard delete the CV
-        await prisma.resume.delete({
-            where: { id: resumeId },
+        // else, hard delete the CV and write the audit log in one transaction
+        await prisma.$transaction(async (tx) => {
+            await tx.resume.delete({
+                where: { id: resumeId },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "RESUME_DELETED",
+                targetId: resumeId,
+                message: ResumeDeleted(resume.title),
+                actor: currentUser,
+            });
         });
 
         // Delete the file from local storage

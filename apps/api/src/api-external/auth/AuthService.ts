@@ -16,12 +16,24 @@ import { ResetTokenUtils } from "../../utils/ResetTokenUtils";
 import { EmailService } from "../../email/EmailService";
 import { HttpError } from "../../utils/HttpError";
 
+import { AuditLogger } from "../../logging/AuditLogger";
+import {
+    UserRegistered,
+    UserLoggedIn,
+    UserLoginFailed,
+    PasswordResetRequested,
+    PasswordResetCompleted,
+} from "../../logging/LogMessages";
+import { CurrentUser } from "../../security/CurrentAuthenticatedUser";
+
 const passwordHasher = new PasswordHasher();
 const jwtService = new JwtService();
 const RESET_TOKEN_EXPIRY_TIME = Number(process.env.RESET_TOKEN_EXPIRY_TIME) || 15;
 const PASSWORD_RESET_MESSAGE = String(process.env.PASSWORD_RESET_MESSAGE);
 
 export class AuthService {
+    private readonly auditLogger = new AuditLogger();
+
     constructor(private readonly emailService: EmailService = new EmailService()) {}
 
     public async login(loginRequest: LoginRequest): Promise<LoginResponse> {
@@ -32,6 +44,12 @@ export class AuthService {
 
         // 2. If user does not exist, reject login
         if (!user) {
+            await this.auditLogger.logStandalone({
+                action: "USER_LOGIN_FAILED",
+                targetId: null,
+                message: UserLoginFailed(loginRequest.email),
+                actor: null,
+            });
             throw new HttpError(404, "Invalid email or password.");
         }
 
@@ -40,6 +58,12 @@ export class AuthService {
 
         // 4. If password invalid, reject login
         if (!isPasswordValid) {
+            await this.auditLogger.logStandalone({
+                action: "USER_LOGIN_FAILED",
+                targetId: user.id,
+                message: UserLoginFailed(user.email),
+                actor: this.toCurrentUser(user),
+            });
             throw new HttpError(401, "Invalid email or password.");
         }
 
@@ -53,7 +77,15 @@ export class AuthService {
             { userId: user.id, email: user.email, roleId: user.roleId }
         );
 
-        // 7. Return accessToken + safe user data
+        // 7. Record the successful login
+        await this.auditLogger.logStandalone({
+            action: "USER_LOGGED_IN",
+            targetId: user.id,
+            message: UserLoggedIn(),
+            actor: this.toCurrentUser(user),
+        });
+
+        // 8. Return accessToken + safe user data
         return {
             accessToken,
             user: {
@@ -62,6 +94,15 @@ export class AuthService {
                 roleId: user.roleId,
                 status: user.status
             }
+        };
+    }
+
+    private toCurrentUser(user: { id: string; email: string; roleId: number; status: string }): CurrentUser {
+        return {
+            id: user.id,
+            email: user.email,
+            roleId: user.roleId,
+            status: user.status,
         };
     }
 
@@ -90,18 +131,30 @@ export class AuthService {
         }
 
         const passwordHash = await passwordHasher.hash(registerRequest.password);
-        const registeredUser = await prisma.user.create({
-          data: {
-            email: registerRequest.email,
-            roleId: defaultRole.id,
-            passwordHash: passwordHash,
-          },
-          select: {
-            id: true,
-            email: true,
-            roleId: true,
-            status: true,
-          },
+        // Create the user and write the audit log in one transaction
+        const registeredUser = await prisma.$transaction(async (tx) => {
+            const created = await tx.user.create({
+              data: {
+                email: registerRequest.email,
+                roleId: defaultRole.id,
+                passwordHash: passwordHash,
+              },
+              select: {
+                id: true,
+                email: true,
+                roleId: true,
+                status: true,
+              },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "USER_REGISTERED",
+                targetId: created.id,
+                message: UserRegistered(),
+                actor: this.toCurrentUser(created),
+            });
+
+            return created;
         });
         return {
           user: registeredUser,
@@ -135,13 +188,22 @@ export class AuthService {
         const rawToken = ResetTokenUtils.generate();
         const tokenHash = ResetTokenUtils.hash(rawToken);
 
-        // 4. create token hash entry in DB
-        await prisma.passwordResetToken.create({
-            data: {
-                userId: user.id,
-                tokenHash: tokenHash,
-                expiresAt: new Date(Date.now() + RESET_TOKEN_EXPIRY_TIME * 60 * 1000)
-            }
+        // 4. Create the token hash entry and write the audit log in one transaction
+        await prisma.$transaction(async (tx) => {
+            await tx.passwordResetToken.create({
+                data: {
+                    userId: user.id,
+                    tokenHash: tokenHash,
+                    expiresAt: new Date(Date.now() + RESET_TOKEN_EXPIRY_TIME * 60 * 1000)
+                }
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "PASSWORD_RESET_REQUESTED",
+                targetId: user.id,
+                message: PasswordResetRequested(user.email),
+                actor: null,
+            });
         });
 
         // 5. Send email to user
@@ -176,17 +238,26 @@ export class AuthService {
         // 4. Hash the new password
         const passwordHash = await passwordHasher.hash(request.newPassword);
 
-        // 5. Prisma need to update 2 table: users.passwordHash and passwordResetToken.usedAt
-        await prisma.$transaction([
-            prisma.user.update({
+        // 5. Update users.passwordHash + passwordResetToken.usedAt + write the audit log in one transaction
+        await prisma.$transaction(async (tx) => {
+            const updatedUser = await tx.user.update({
                 where: { id: resetTokenRecord.userId },
-                data: { passwordHash: passwordHash }
-            }),
-            prisma.passwordResetToken.update({
+                data: { passwordHash: passwordHash },
+                select: { email: true },
+            });
+
+            await tx.passwordResetToken.update({
                 where: { id: resetTokenRecord.id },
                 data: { usedAt: new Date() }
-            })
-        ]);
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "PASSWORD_RESET_COMPLETED",
+                targetId: resetTokenRecord.userId,
+                message: PasswordResetCompleted(updatedUser.email),
+                actor: null,
+            });
+        });
 
         return {
             message: "Password reset successful."

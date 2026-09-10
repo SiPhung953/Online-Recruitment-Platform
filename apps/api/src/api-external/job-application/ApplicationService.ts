@@ -3,6 +3,8 @@ import { HttpError } from '../../utils/HttpError';
 import { assertJobSeeker } from '../../api-shared/guard/AssertRole';
 
 import { CurrentUser } from '../../security/CurrentAuthenticatedUser';
+import { AuditLogger } from '../../logging/AuditLogger';
+import { ApplicationSubmitted, ApplicationWithdrawn } from '../../logging/LogMessages';
 
 import { ApplyJobRequest } from './ApplyJobRequest';
 import { ApplyJobResponse } from './ApplyJobResponse';
@@ -10,6 +12,8 @@ import { ApplicationListDto } from './ApplicationListDto';
 import { WithdrawApplicationResponse } from './WithdrawApplicationResponse';
 
 export class ApplicationService {
+    private readonly auditLogger = new AuditLogger();
+
     public async applyJob(
         currentUser: CurrentUser,
         requestBody: ApplyJobRequest
@@ -26,6 +30,7 @@ export class ApplicationService {
             select: {
                 id: true,
                 status: true,
+                title: true,
             },
         });
 
@@ -62,19 +67,30 @@ export class ApplicationService {
         if (application) {
             throw new HttpError(409, "You have already applied for this job.")
         }
-        // 5. If nothing goes wrong, create an application row
-        const createdApplication = await prisma.application.create({
-            data: {
-                userId: currentUser.id,
-                jobId: job.id,
-                resumeId: resume.id,
-                status: "SUBMITTED"
-            },
-            select: {
-                id: true,
-                status: true,
-                appliedAt: true,
-            },
+        // 5. If nothing goes wrong, create an application row and write the audit log in one transaction
+        const createdApplication = await prisma.$transaction(async (tx) => {
+            const created = await tx.application.create({
+                data: {
+                    userId: currentUser.id,
+                    jobId: job.id,
+                    resumeId: resume.id,
+                    status: "SUBMITTED"
+                },
+                select: {
+                    id: true,
+                    status: true,
+                    appliedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "APPLICATION_SUBMITTED",
+                targetId: created.id,
+                message: ApplicationSubmitted(job.title),
+                actor: currentUser,
+            });
+
+            return created;
         });
 
         return {
@@ -143,6 +159,11 @@ export class ApplicationService {
                 id: true,
                 userId: true,
                 status: true,
+                job: {
+                    select: {
+                        title: true,
+                    },
+                },
             },
         });
         // existence check
@@ -159,16 +180,27 @@ export class ApplicationService {
             throw new HttpError(400, "Application cannot be withdrawn at its current status.");
         }
 
-        const updatedApplication = await prisma.application.update({
-            where: { id: applicationId },
-            data: {
-                status: "WITHDRAWN",
-                withdrawnAt: new Date(),
-            },
-            select: {
-                status: true,
-                withdrawnAt: true,
-            },
+        const updatedApplication = await prisma.$transaction(async (tx) => {
+            const updated = await tx.application.update({
+                where: { id: applicationId },
+                data: {
+                    status: "WITHDRAWN",
+                    withdrawnAt: new Date(),
+                },
+                select: {
+                    status: true,
+                    withdrawnAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "APPLICATION_WITHDRAWN",
+                targetId: applicationId,
+                message: ApplicationWithdrawn(application.job.title),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         return {

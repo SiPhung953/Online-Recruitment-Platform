@@ -3,6 +3,9 @@ import { HttpError } from '../../utils/HttpError';
 import { CurrentUser } from '../../security/CurrentAuthenticatedUser';
 import { assertAdmin } from '../../api-shared/guard/AssertRole';
 
+import { AuditLogger } from '../../logging/AuditLogger';
+import { JobApproved, JobRejected, JobDeleted } from '../../logging/LogMessages';
+
 import { JobStatus } from '../../api-shared/type/JobStatus';
 import { ModerationJobListResponse } from './ModerationJobListResponse';
 import { ModerationJobDetailResponse } from './ModerationJobDetailResponse';
@@ -13,6 +16,8 @@ import { DeleteJobRequest } from './DeleteJobRequest';
 import { DeleteJobResponse } from './DeleteJobResponse';
 
 export class JobModerationService {
+    private readonly auditLogger = new AuditLogger();
+
     // private helper for validating deletion/rejection reason (trimming, no empty field, no longer than 255 char)
     private validateReason(reason: string): string {
         const trimmed = reason?.trim();
@@ -144,6 +149,12 @@ export class JobModerationService {
             select: {
                 status: true,
                 deadline: true,
+                title: true,
+                company: {
+                    select: {
+                        name: true,
+                    },
+                },
             },
         });
 
@@ -168,21 +179,32 @@ export class JobModerationService {
             throw new HttpError(400, "This job posting has expired.")
         };
 
-        // 4. Update job status
-        const approvedJob = await prisma.job.update({
-            where: {
-                id: jobId,
-            },
-            data: {
-                status: "ACTIVE",
-                approvedAt: new Date(),
-                rejectedAt: null,
-                rejectionReason: null
-            },
-            select: {
-                id: true,
-                approvedAt: true,
-            },
+        // 4. Update job status and write the audit log in one transaction
+        const approvedJob = await prisma.$transaction(async (tx) => {
+            const updated = await tx.job.update({
+                where: {
+                    id: jobId,
+                },
+                data: {
+                    status: "ACTIVE",
+                    approvedAt: new Date(),
+                    rejectedAt: null,
+                    rejectionReason: null
+                },
+                select: {
+                    id: true,
+                    approvedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "JOB_APPROVED",
+                targetId: jobId,
+                message: JobApproved(job.title, job.company.name),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         return {
@@ -208,6 +230,12 @@ export class JobModerationService {
             },
             select: {
                 status: true,
+                title: true,
+                company: {
+                    select: {
+                        name: true,
+                    },
+                },
             },
         });
 
@@ -226,27 +254,39 @@ export class JobModerationService {
             throw new HttpError(400, "This job posting is not rejectable.")
         };
 
-        // 4. Update job posting's status and rejection reason
-        const rejectedJob = await prisma.job.update({
-            where: {
-                id: jobId,
-            },
-            data: {
-                status: "REJECTED",
-                rejectedAt: new Date(),
-                rejectionReason: this.validateReason(requestBody.rejectionReason),
-                approvedAt: null,
-            },
-            select: {
-                id: true,
-                rejectedAt: true,
-            },
+        // 4. Update job status and write the audit log in one transaction
+        const rejectionReason = this.validateReason(requestBody.rejectionReason);
+        const rejectedJob = await prisma.$transaction(async (tx) => {
+            const updated = await tx.job.update({
+                where: {
+                    id: jobId,
+                },
+                data: {
+                    status: "REJECTED",
+                    rejectedAt: new Date(),
+                    rejectionReason,
+                    approvedAt: null,
+                },
+                select: {
+                    id: true,
+                    rejectedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "JOB_REJECTED",
+                targetId: jobId,
+                message: JobRejected(job.title, job.company.name, rejectionReason),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         return {
             jobId: rejectedJob.id,
             status: "REJECTED",
-            rejectionReason: this.validateReason(requestBody.rejectionReason),
+            rejectionReason,
             rejectedAt: rejectedJob.rejectedAt || new Date(),
             message: "Job posting rejected successfully."
         };
@@ -267,6 +307,12 @@ export class JobModerationService {
             },
             select: {
                 status: true,
+                title: true,
+                company: {
+                    select: {
+                        name: true,
+                    },
+                },
             },
         });
 
@@ -285,27 +331,39 @@ export class JobModerationService {
             throw new HttpError(400, "A PENDING_APPROVAL job posting cannot be deleted; reject it instead.")
         };
 
-        // 4. Update job posting's status
-        const deletedJob = await prisma.job.update({
-            where: {
-                id: jobId,
-            },
-            data: {
-                status: "DELETED",
-                deletedAt: new Date(),
-                deletionReason: this.validateReason(requestBody.deletionReason),
-            },
-            select: {
-                id: true,
-                deletedAt: true,
-            },
+        // 4. Update job posting's status and write the audit log in one transaction
+        const deletionReason = this.validateReason(requestBody.deletionReason);
+        const deletedJob = await prisma.$transaction(async (tx) => {
+            const updated = await tx.job.update({
+                where: {
+                    id: jobId,
+                },
+                data: {
+                    status: "DELETED",
+                    deletedAt: new Date(),
+                    deletionReason,
+                },
+                select: {
+                    id: true,
+                    deletedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "JOB_DELETED",
+                targetId: jobId,
+                message: JobDeleted(job.title, job.company.name, deletionReason),
+                actor: currentUser,
+            });
+
+            return updated;
         });
 
         return {
             jobId: deletedJob.id,
             status: "DELETED",
             deletedAt: deletedJob.deletedAt || new Date(),
-            deletionReason: this.validateReason(requestBody.deletionReason),
+            deletionReason,
             message: "Job posting deleted successfully."
         }
     }

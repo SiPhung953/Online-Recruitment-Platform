@@ -3,6 +3,10 @@ import { prisma } from '../../lib/prisma';
 import { PasswordHasher } from '../../utils/PasswordHasher';
 import { HttpError } from '../../utils/HttpError';
 
+import { CurrentUser } from '../../security/CurrentAuthenticatedUser';
+import { AuditLogger } from '../../logging/AuditLogger';
+import { ProfileUpdated, JobPreferenceUpdated, AvatarChanged, PasswordChanged } from '../../logging/LogMessages';
+
 import { UpdateJobPreferencesRequest } from './UpdateJobPreferenceRequest';
 import { UpdatePersonalInformationRequest } from './UpdatePersonalInformationRequest';
 import { UpdatePersonalInformationResponse } from './UpdatePersonalInformationResponse';
@@ -15,6 +19,7 @@ import { ChangeAvatarResponse } from './ChangeAvatarResponse';
 export class ProfileService {
     private readonly passwordHasher = new PasswordHasher();
     private readonly fileStorageService = new FileStorageService();
+    private readonly auditLogger = new AuditLogger();
 
     public async getMyProfile(userId: string) {
         const profile = await prisma.userProfile.findUnique({
@@ -39,45 +44,56 @@ export class ProfileService {
     }
 
     public async updatePersonalInformation(
-        userId: string,
+        currentUser: CurrentUser,
         requestBody: UpdatePersonalInformationRequest
     ): Promise<UpdatePersonalInformationResponse> {
         // upsert is the equivalent of PATCH
         // where we can either: update if existed or create if not existed
-        const profile = await prisma.userProfile.upsert({
-            // 1. Find user by Id
-            where: { userId },
-            // 2.1. Update user profile if existed
-            // As in, they have update their profile before/they have created their profile
-            update: {
-                fullName: requestBody.fullName,
-                dateOfBirth: requestBody.dateOfBirth,
-                headline: requestBody.headline,
-                phoneNumber: requestBody.phoneNumber,
-                city: requestBody.city,
-                summary: requestBody.summary,
-            },
-            // 2.2. Create user profile if not existed
-            create: {
-                userId,
-                fullName: requestBody.fullName,
-                dateOfBirth: requestBody.dateOfBirth,
-                headline: requestBody.headline,
-                phoneNumber: requestBody.phoneNumber,
-                city: requestBody.city,
-                summary: requestBody.summary,
-            },
-            // Only update/create the field needed to be
-            // Once again, normal user can't modify date/logs stuff 
-            select: {
-                fullName: true,
-                dateOfBirth: true,
-                headline: true,
-                phoneNumber: true,
-                city: true,
-                summary: true,
-                updatedAt: true,
-            },
+        const profile = await prisma.$transaction(async (tx) => {
+            const result = await tx.userProfile.upsert({
+                // 1. Find user by Id
+                where: { userId: currentUser.id },
+                // 2.1. Update user profile if existed
+                // As in, they have update their profile before/they have created their profile
+                update: {
+                    fullName: requestBody.fullName,
+                    dateOfBirth: requestBody.dateOfBirth,
+                    headline: requestBody.headline,
+                    phoneNumber: requestBody.phoneNumber,
+                    city: requestBody.city,
+                    summary: requestBody.summary,
+                },
+                // 2.2. Create user profile if not existed
+                create: {
+                    userId: currentUser.id,
+                    fullName: requestBody.fullName,
+                    dateOfBirth: requestBody.dateOfBirth,
+                    headline: requestBody.headline,
+                    phoneNumber: requestBody.phoneNumber,
+                    city: requestBody.city,
+                    summary: requestBody.summary,
+                },
+                // Only update/create the field needed to be
+                // Once again, normal user can't modify date/logs stuff 
+                select: {
+                    fullName: true,
+                    dateOfBirth: true,
+                    headline: true,
+                    phoneNumber: true,
+                    city: true,
+                    summary: true,
+                    updatedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "PROFILE_UPDATED",
+                targetId: currentUser.id,
+                message: ProfileUpdated(),
+                actor: currentUser,
+            });
+
+            return result;
         });
         return {
             message: "Profile Updated Successfully",
@@ -102,59 +118,70 @@ export class ProfileService {
     }
 
     public async updateJobPreference(
-        userId: string,
+        currentUser: CurrentUser,
         requestBody: UpdateJobPreferencesRequest
     ): Promise<UpdateJobPreferencesResponse> {
-        const jobPreferences = await prisma.userJobPreference.upsert({
-            where: { userId },
-            
-            // Some important stuff here
-            // First, (undefined) -> The user may or may not sent field
-            // Second, (null) -> The user can clear the field and sent
-            // Third, Enum value or string -> The user set a value and sent field
-            
-            // For update, only include fields that are not undefined.
-            update: {
-                ...(requestBody.profileVisibility !== undefined && {
-                    profileVisibility: requestBody.profileVisibility,
-                }),
-                ...(requestBody.jobSearchStatus !== undefined && {
-                    jobSearchStatus: requestBody.jobSearchStatus,
-                }),
-                // If desiredJobTitle was undefined -> undefined === undefined -> skip field
-                // If desiredJobTitle was null -> null !== undefined -> include field, set database value to null
-                // If desiredJobTitle was string -> string !== undefined -> include field, set database value to that string
-                ...(requestBody.desiredJobTitle !== undefined && {
-                    desiredJobTitle: requestBody.desiredJobTitle,
-                }),
-                ...(requestBody.preferredLocation !== undefined && {
-                    preferredLocation: requestBody.preferredLocation,
-                }),
-            },
-            // FIX: No need to enforce double default unless necessary
-            // The database have already provide default values
-            create: {
-                userId,
-                ...(requestBody.profileVisibility !== undefined && {
-                    profileVisibility: requestBody.profileVisibility,
-                }),
-                ...(requestBody.jobSearchStatus !== undefined && {
-                    jobSearchStatus: requestBody.jobSearchStatus,
-                }),
-                ...(requestBody.desiredJobTitle !== undefined && {
-                    desiredJobTitle: requestBody.desiredJobTitle,
-                }),
-                ...(requestBody.preferredLocation !== undefined && {
-                    preferredLocation: requestBody.preferredLocation,
-                }),
-            },
-            select: {
-                profileVisibility: true,
-                jobSearchStatus: true,
-                desiredJobTitle: true,
-                preferredLocation: true,
-                updatedAt: true,
-            },
+        const jobPreferences = await prisma.$transaction(async (tx) => {
+            const result = await tx.userJobPreference.upsert({
+                where: { userId: currentUser.id },
+                
+                // Some important stuff here
+                // First, (undefined) -> The user may or may not sent field
+                // Second, (null) -> The user can clear the field and sent
+                // Third, Enum value or string -> The user set a value and sent field
+                
+                // For update, only include fields that are not undefined.
+                update: {
+                    ...(requestBody.profileVisibility !== undefined && {
+                        profileVisibility: requestBody.profileVisibility,
+                    }),
+                    ...(requestBody.jobSearchStatus !== undefined && {
+                        jobSearchStatus: requestBody.jobSearchStatus,
+                    }),
+                    // If desiredJobTitle was undefined -> undefined === undefined -> skip field
+                    // If desiredJobTitle was null -> null !== undefined -> include field, set database value to null
+                    // If desiredJobTitle was string -> string !== undefined -> include field, set database value to that string
+                    ...(requestBody.desiredJobTitle !== undefined && {
+                        desiredJobTitle: requestBody.desiredJobTitle,
+                    }),
+                    ...(requestBody.preferredLocation !== undefined && {
+                        preferredLocation: requestBody.preferredLocation,
+                    }),
+                },
+                // FIX: No need to enforce double default unless necessary
+                // The database have already provide default values
+                create: {
+                    userId: currentUser.id,
+                    ...(requestBody.profileVisibility !== undefined && {
+                        profileVisibility: requestBody.profileVisibility,
+                    }),
+                    ...(requestBody.jobSearchStatus !== undefined && {
+                        jobSearchStatus: requestBody.jobSearchStatus,
+                    }),
+                    ...(requestBody.desiredJobTitle !== undefined && {
+                        desiredJobTitle: requestBody.desiredJobTitle,
+                    }),
+                    ...(requestBody.preferredLocation !== undefined && {
+                        preferredLocation: requestBody.preferredLocation,
+                    }),
+                },
+                select: {
+                    profileVisibility: true,
+                    jobSearchStatus: true,
+                    desiredJobTitle: true,
+                    preferredLocation: true,
+                    updatedAt: true,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "JOB_PREFERENCE_UPDATED",
+                targetId: currentUser.id,
+                message: JobPreferenceUpdated(),
+                actor: currentUser,
+            });
+
+            return result;
         });
         return {
             message: "Job Preference Updated Successfully",
@@ -163,7 +190,7 @@ export class ProfileService {
     }
     
     public async changeAvatar(
-        userId: string,
+        currentUser: CurrentUser,
         avatarFile: Express.Multer.File
     ): Promise<ChangeAvatarResponse> {
         // 1. Verify that file exist
@@ -186,12 +213,21 @@ export class ProfileService {
         }
         // 4. Save image
         const avatarUrl = await this.fileStorageService.saveAvatar(avatarFile);
-        // 5. Update userProfile.avatarUrl
-        await prisma.userProfile.update({
-            where: { userId: userId },
-            data: {
-                avatarUrl
-            },
+        // 5. Update userProfile.avatarUrl and write the audit log in one transaction
+        await prisma.$transaction(async (tx) => {
+            await tx.userProfile.update({
+                where: { userId: currentUser.id },
+                data: {
+                    avatarUrl
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "AVATAR_CHANGED",
+                targetId: currentUser.id,
+                message: AvatarChanged(),
+                actor: currentUser,
+            });
         });
         // 6. Return AvatarUrl
         return {
@@ -201,12 +237,12 @@ export class ProfileService {
     }
 
     public async changePassword(
-        userId: string,
+        currentUser: CurrentUser,
         requestBody: ChangePasswordRequest
     ): Promise<ChangePasswordResponse> {
         // 1. Find user to get their current passwordHash
         const user = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { id: currentUser.id },
             select: {
                 passwordHash: true,
             }
@@ -237,12 +273,21 @@ export class ProfileService {
         const newPasswordHash = await this.passwordHasher.hash(
             requestBody.newPassword
         );
-        // 8. Update Prisma with new passwordHash
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                passwordHash: newPasswordHash,
-            },
+        // 8. Update Prisma with new passwordHash and write the audit log in one transaction
+        await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+                where: { id: currentUser.id },
+                data: {
+                    passwordHash: newPasswordHash,
+                },
+            });
+
+            await this.auditLogger.log(tx, {
+                action: "PASSWORD_CHANGED",
+                targetId: currentUser.id,
+                message: PasswordChanged(currentUser.email),
+                actor: currentUser,
+            });
         });
         return {
             message: "Password changed successfully",
