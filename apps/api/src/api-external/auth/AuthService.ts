@@ -20,6 +20,7 @@ import { AuditLogger } from "../../logging/AuditLogger";
 import {
     UserRegistered,
     UserLoggedIn,
+    UserLoggedOut,
     UserLoginFailed,
     PasswordResetRequested,
     PasswordResetCompleted,
@@ -161,11 +162,17 @@ export class AuthService {
         };
     }
     
-    public logout(): LogoutResponse {
-        // Because the logout happened at frontend level (JWT being stateless)
-        // Frontend UI will remove accessToken and redirect user to /login
-        // Thus, this method is neither async nor does it return a promise, since the
-        // message is only meant as "Backend operation is completed"
+    public async logout(currentUser: CurrentUser): Promise<LogoutResponse> {
+        // The JWT is stateless, so "logging out" on the client only means
+        // deleting the stored token. To still record WHO logged out, the
+        // frontend sends one last authenticated request with its valid token.
+        await this.auditLogger.logStandalone({
+            action: "USER_LOGGED_OUT",
+            targetId: currentUser.id,
+            message: UserLoggedOut(),
+            actor: currentUser,
+        });
+
         return {
             message: "Logout Successful"
         }

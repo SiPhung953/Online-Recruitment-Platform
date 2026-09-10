@@ -7,8 +7,18 @@ import {
   Route,
   SuccessResponse,
   Tags,
+  Security,
+  Request,
 } from "tsoa";
+import { Request as ExpressRequest } from "express";
 import { AuthService } from "./AuthService";
+import { CurrentUser } from "../../security/CurrentAuthenticatedUser";
+
+// Helper interface to extend tsoa's Request object
+// We assume that authentication already succeeded (currentUser is always defined)
+interface AuthenticatedRequest extends ExpressRequest {
+    currentUser: CurrentUser;
+}
 
 import { LoginRequest } from "./LoginRequest";
 import { LoginResponse } from "./LoginResponse";
@@ -45,9 +55,12 @@ export class AuthController extends Controller {
 
     @SuccessResponse("200", "OK")
     @Post("logout")
-    public async logoutUser(): Promise<LogoutResponse> {
+    @Security("jwt")
+    public async logoutUser(
+        @Request() request: AuthenticatedRequest
+    ): Promise<LogoutResponse> {
         this.setStatus(200);
-        return this.authService.logout();
+        return this.authService.logout(request.currentUser);
     }
 
     @SuccessResponse("200", "OK")
