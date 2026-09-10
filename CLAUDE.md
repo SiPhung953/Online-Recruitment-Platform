@@ -19,10 +19,13 @@ I am a **code reviewer and architectural mentor, not an autopilot implementer.**
 | Use cases + business rules | `C:\Users\Phung Dam Tien Si\Documents\Testing\preparation\Nghiên cứu nghiệp vụ.md` | `/mnt/c/Users/Phung\ Dam\ Tien\ Si/Documents/Testing/preparation/Nghiên\ cứu\ nghiệp\ vụ.md` |
 | Pending doc fixes + follow-ups | `C:\Users\Phung Dam Tien Si\Documents\Testing\todo\todo.md` | `/mnt/c/Users/Phung\ Dam\ Tien\ Si/Documents/Testing/todo/todo.md` |
 | Approved implementation specs | `~/.claude/plans/` | `~/.claude/plans/` |
+| Class + Sequence diagrams | `...\bachelor-thesis-paper\diagrams\source\` | `/mnt/c/Users/Phung Dam Tien Si/Project/Bachelor Thesis/bachelor-thesis-paper/diagrams/source/` |
 
 The use-case document is the requirements baseline. When code and document disagree, say so explicitly — the document is what gets defended, so drift in either direction is a finding.
 
 Use cases are numbered by the **body headings**, not the table of contents (the two are out of sync).
+
+Every use case gets a **Class Diagram** and a **Sequence Diagram** (Mermaid, in `.txt`) before implementation, grouped by actor: `1Public`, `2Auth`, `3Profile`, `4Resume`, `5JobSeeker`, `6Employer`, `7BackOffice`. Read the diagrams for a feature before reviewing or designing it — they are the intended design. Some Employer sequence diagrams are missing because those use cases were added mid-implementation.
 
 ## Commands
 
@@ -43,7 +46,7 @@ HTTP → generated/routes.ts → Controller (tsoa decorators) → Service (busin
 ```
 
 - **Controllers** declare routing, auth, status codes. No business logic. They call `this.setStatus(...)` and pass `request.currentUser` — never the whole request, never a bare `userId`.
-- **Services** own all rules and all Prisma access. They receive `currentUser` and re-check role/ban themselves (defense in depth, on top of the tsoa scope check).
+- **Services** own all rules and all Prisma access. They receive `currentUser` and re-check role themselves (defense in depth, on top of the tsoa scope check). The banned check lives once in `authentication.ts`, not in services.
 - **`src/generated/`** — `routes.ts` and `swagger.json` are build output. Never hand-edit. OpenAPI metadata lives in `apps/api/tsoa.json`.
 - A scheduled/background task is just a second caller of the same Service method; put the logic in a service, not in the timer callback.
 
@@ -53,7 +56,7 @@ HTTP → generated/routes.ts → Controller (tsoa decorators) → Service (busin
 - **Filenames mirror the exported symbol**, in PascalCase, whether it is a class, interface, enum, or type — `CompanyResponse.ts` exports `CompanyResponse`, `RoleConstant.ts` exports `RoleConstant`. lowercase is reserved for app wiring that names no domain concept: `app.ts`, `server.ts`, `prisma.ts`, `authentication.ts` (that last one is fixed by `tsoa.json`'s `authenticationModule`). A module of several helpers takes the collection's name (`EmailTemplates.ts`).
 - DTO naming: `<Action>Request` / `<Action>Response`; list items are `...Dto` (`MyJobListItemDto`), list endpoints return an envelope (`{ items }`), never a bare array — so pagination can be added without breaking clients.
 - List DTOs carry summary fields only; long text (`description`, `requirement`) belongs to the detail DTO.
-- A role guard (`assertEmployer` / `assertJobSeeker`) is step 1 of every service method. The shared implementation lives in `api-shared/guard/AssertRole.ts`; `EmployerCompanyService`, `JobManagementService` and `ApplicationService` still carry private copies and have not been switched over yet.
+- A role guard (`assertJobSeeker` / `assertEmployer` / `assertAdmin`) is step 1 of every service method. The shared implementation lives in `api-shared/guard/AssertRole.ts`; `EmployerCompanyService` and `JobManagementService` use it (`assertAdmin` backs the `api-internal` modules). `ApplicationService` and the upcoming `EmployerApplicationService` still carry private copies.
 - Numbered step comments (`// 1. ...`) in service methods, following `ApplicationService`.
 - Errors: `throw new HttpError(status, message)` from `utils/HttpError`.
 
@@ -79,8 +82,21 @@ Length caps are `400`, not `413`. Ownership checks are 404-then-403.
 ## Known gaps
 
 - Nothing ever sets `JobStatus.EXPIRED`. Public search and `applyJob` filter on `status: 'ACTIVE'` without a deadline check, so past-deadline jobs stay visible and still accept applications, contradicting UC-EMP-01.
-- `api-internal/` (moderation) is empty — no way to move a job to `ACTIVE` except by editing the database.
+- `AuditLogger` (in `src/logging/`) now records every mutation across moderation, employer jobs, company, auth, profile, resumes, and applications: each system write and its `Log` row commit in the same interactive `prisma.$transaction`, so a job can't be created with no log (or logged without creating). Standalone events (login) use `logStandalone`. What's still missing: `USER_LOGGED_OUT` (the logout endpoint is unauthenticated, so there is no actor), and UC-ADMIN-05 (an admin endpoint/UI to read the `Log` rows) does not exist yet.
 
 ## Future work (not urgent)
 
+### Web
+
+- **Date formatting is scattered.** `ui-shared/format/DateFormat.ts` now owns `formatDate` / `formatDeadline` / `isPastDeadline`, pinned to `PLATFORM_TIME_ZONE`. Four older call sites still format inline with their own locale — `ApplicationCard.tsx`, `ResumeSelector.tsx`, `ProfilePage.tsx` (all `en-GB`) and `JobDetailPage.tsx` (`en-US`, plus its own local `formatDeadline` that ignores the time zone). Point them at the shared module.
+- **`JobDetailPage` renders mock data.** It imports `mockJobs` / `mockCompanies` from `ui-external/public/mockData.ts` instead of calling `getJobDetail`. Wiring it up also needs `GetJobDetailResponse` extended — it currently carries no `deadline` and no `requirement`, both of which the page displays.
+- **`hasApplied` in `JobDetailPage` is permanently `false`** — the state has no setter, so the "already applied" branch is unreachable.
+- **`ProfilePage` still uses a raw `<textarea>`** — the only one left after the shadcn `Textarea` migration.
+- **`MyJobPostingsPage` refetches the whole list after every mutation.** Each mutation response already returns the new status and its timestamp, so patching local state would avoid the round trip and the loading blink. Deliberate trade — refetch is always correct, patching duplicates backend rules in the UI.
+- **Deadline timezone is the submitting browser's.** `toDeadlineIso` converts using whatever zone the employer's browser was in at submission. UC-EMP-01 says "employer's local time", but no employer timezone is stored — so editing a posting from a different zone changes the instant for the same displayed date.
+- **`JobPostingForm` has a stale comment** (`~:114`) justifying the segmented control by claiming `DESIGN.md` forbids adding packages. Rule 2 was rewritten and no longer says that; the real reason is that three mutually exclusive options read better than a dropdown.
+
+### API
+
+- **`searchJobs` ships undeclared `company` data.** `JobDiscoveryService.searchJobs` selects `company: { id, name }`, but `JobListItemDto` declares no `company` field. `return { items: jobs }` passes a variable rather than a fresh object literal, so excess-property checking never fires — the data goes out in the public JSON while `swagger.json` omits it, and the generated client cannot see it. Either add `company` to the DTO (UC-PUB-01 lists `companies.name` as related data, so it likely belongs) or drop it from the `select`. Same file: `JobListItemDto.description?` is never selected, so it is permanently `undefined`.
 - **Dependency direction between `api/` and `ui-shared/auth/`.** `apps/web/src/api/apiClient.ts` imports `clearStoredSession` from `ui-shared/auth/AuthContext.tsx`, so the API layer depends on a React/JSX module. It works and there is no import cycle, but the arrow points the wrong way. Fix by moving the storage keys and `clearStoredSession` into a plain (non-React) `ui-shared/auth/SessionStorage.ts` that both `AuthContext` and `apiClient` import.
