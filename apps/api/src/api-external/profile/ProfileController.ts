@@ -50,8 +50,7 @@ export class ProfileController extends Controller {
     @Request() request: AuthenticatedRequest,
     @Body() requestBody: UpdatePersonalInformationRequest
   ) {
-    const userId = request.currentUser!.id;
-    return this.profileService.updatePersonalInformation(userId, requestBody);
+    return this.profileService.updatePersonalInformation(request.currentUser, requestBody);
   }
 
   @SuccessResponse("200", "OK")
@@ -69,8 +68,7 @@ export class ProfileController extends Controller {
     @Request() request: AuthenticatedRequest,
     @Body() requestBody: UpdateJobPreferencesRequest
   ) {
-    const userId = request.currentUser!.id;
-    return this.profileService.updateJobPreference(userId, requestBody);
+    return this.profileService.updateJobPreference(request.currentUser, requestBody);
   }
 
   @SuccessResponse("200", "OK")
@@ -79,8 +77,7 @@ export class ProfileController extends Controller {
     @Request() request: AuthenticatedRequest,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const userId = request.currentUser!.id;
-    return this.profileService.changeAvatar(userId, file);
+    return this.profileService.changeAvatar(request.currentUser, file);
   }
 
   @SuccessResponse("200", "OK")
@@ -89,7 +86,6 @@ export class ProfileController extends Controller {
     @Request() request: AuthenticatedRequest,
     @Body() requestBody: ChangePasswordRequest
   ): Promise<ChangePasswordResponse> {
-    const userId = request.currentUser!.id;
-    return this.profileService.changePassword(userId, requestBody);
+    return this.profileService.changePassword(request.currentUser, requestBody);
   }
 }
