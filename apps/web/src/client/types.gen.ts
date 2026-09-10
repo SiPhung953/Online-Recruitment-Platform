@@ -4,6 +4,75 @@ export type ClientOptions = {
     baseURL: 'http://localhost:3000' | (string & {});
 };
 
+export type JobStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'CLOSED' | 'EXPIRED' | 'DELETED';
+
+export type ModerationJobListItemDto = {
+    jobId: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    status: JobStatus;
+    deadline: string;
+    createdAt: string;
+};
+
+export type ModerationJobListResponse = {
+    items: Array<ModerationJobListItemDto>;
+};
+
+export type EmploymentType = 'ON_SITE' | 'REMOTE' | 'HYBRID';
+
+export type ModerationJobDetailResponse = {
+    jobId: string;
+    title: string;
+    description: string;
+    requirement: string;
+    employmentType: EmploymentType;
+    location: string;
+    status: JobStatus;
+    deadline: string;
+    createdAt: string;
+    updatedAt: string;
+    approvedAt?: string;
+    deletedAt?: string;
+    deletionReason?: string;
+    rejectedAt?: string;
+    rejectionReason?: string;
+    companyId: string;
+    companyName: string;
+};
+
+export type ApproveJobResponse = {
+    jobId: string;
+    status: 'ACTIVE';
+    approvedAt: string;
+    message: string;
+};
+
+export type RejectJobResponse = {
+    jobId: string;
+    status: 'REJECTED';
+    rejectionReason: string;
+    rejectedAt: string;
+    message: string;
+};
+
+export type RejectJobRequest = {
+    rejectionReason: string;
+};
+
+export type DeleteJobResponse = {
+    jobId: string;
+    status: 'DELETED';
+    deletedAt: string;
+    deletionReason: string;
+    message: string;
+};
+
+export type DeleteJobRequest = {
+    deletionReason: string;
+};
+
 export type ResumeDto = {
     id: string;
     title: string;
@@ -29,8 +98,6 @@ export type CompanyProfileDto = {
     district?: string | null;
     description: string;
 };
-
-export type EmploymentType = 'ON_SITE' | 'REMOTE' | 'HYBRID';
 
 export type CompanyJobListItemDto = {
     id: string;
@@ -109,7 +176,6 @@ export type ChangePasswordRequest = {
 export type JobListItemDto = {
     id: string;
     title: string;
-    description?: string;
     employmentType: EmploymentType;
     location: string;
 };
@@ -163,8 +229,6 @@ export type WithdrawApplicationResponse = {
     withdrawnAt: string;
     message: string;
 };
-
-export type JobStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'CLOSED' | 'EXPIRED' | 'DELETED';
 
 export type MyJobListItemDto = {
     jobId: string;
@@ -385,6 +449,96 @@ export type ResetPasswordRequest = {
     newPassword: string;
 };
 
+export type GetJobsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: JobStatus;
+    };
+    url: '/admin/jobs';
+};
+
+export type GetJobsResponses = {
+    /**
+     * OK
+     */
+    200: ModerationJobListResponse;
+};
+
+export type GetJobsResponse = GetJobsResponses[keyof GetJobsResponses];
+
+export type GetJobDetailData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/admin/jobs/{jobId}';
+};
+
+export type GetJobDetailResponses = {
+    /**
+     * OK
+     */
+    200: ModerationJobDetailResponse;
+};
+
+export type GetJobDetailResponse2 = GetJobDetailResponses[keyof GetJobDetailResponses];
+
+export type ApproveJobData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/admin/jobs/{jobId}/approve';
+};
+
+export type ApproveJobResponses = {
+    /**
+     * OK
+     */
+    200: ApproveJobResponse;
+};
+
+export type ApproveJobResponse2 = ApproveJobResponses[keyof ApproveJobResponses];
+
+export type RejectJobData = {
+    body: RejectJobRequest;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/admin/jobs/{jobId}/reject';
+};
+
+export type RejectJobResponses = {
+    /**
+     * OK
+     */
+    200: RejectJobResponse;
+};
+
+export type RejectJobResponse2 = RejectJobResponses[keyof RejectJobResponses];
+
+export type DeleteJobData = {
+    body: DeleteJobRequest;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/admin/jobs/{jobId}/delete';
+};
+
+export type DeleteJobResponses = {
+    /**
+     * OK
+     */
+    200: DeleteJobResponse;
+};
+
+export type DeleteJobResponse2 = DeleteJobResponses[keyof DeleteJobResponses];
+
 export type GetMyResumesData = {
     body?: never;
     path?: never;
@@ -593,7 +747,7 @@ export type SearchJobsResponses = {
 
 export type SearchJobsResponse2 = SearchJobsResponses[keyof SearchJobsResponses];
 
-export type GetJobDetailData = {
+export type GetJobDetail2Data = {
     body?: never;
     path: {
         jobId: string;
@@ -602,14 +756,14 @@ export type GetJobDetailData = {
     url: '/jobs/{jobId}';
 };
 
-export type GetJobDetailResponses = {
+export type GetJobDetail2Responses = {
     /**
      * OK
      */
     200: GetJobDetailResponse;
 };
 
-export type GetJobDetailResponse2 = GetJobDetailResponses[keyof GetJobDetailResponses];
+export type GetJobDetail2Response = GetJobDetail2Responses[keyof GetJobDetail2Responses];
 
 export type ApplyJobsData = {
     body: ApplyJobRequest;

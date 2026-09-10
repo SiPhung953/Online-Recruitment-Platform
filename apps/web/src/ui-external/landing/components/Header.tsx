@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/ui-shared/components/ui/button"
 import { GraduationCap, List, X, User, CaretDown, SignOut, Briefcase } from "@phosphor-icons/react"
+import { logoutUser } from '@/client'
 
 export default function Header() {
   const navigate = useNavigate()
@@ -35,6 +36,8 @@ export default function Header() {
   }, [])
 
   const handleLogout = () => {
+    void logoutUser().catch(() => {})
+    // Read token from localStorage, .catch swallow rejection (expire token)
     localStorage.removeItem("accessToken")
     localStorage.removeItem("userEmail")
     setIsLoggedIn(false)
