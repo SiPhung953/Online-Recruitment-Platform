@@ -2,7 +2,41 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
+// Characters a filename may not contain on Windows. Kept as a plain string so
+// the check below stays readable next to the control-character test.
+const FORBIDDEN_NAME_CHARACTERS = '<>:"|?*';
+
 export class FileStorageService {
+    /**
+     * Reduces a client-supplied filename to something safe to join onto a
+     * directory path.
+     *
+     * `file.originalname` arrives verbatim from the browser's multipart body,
+     * so it can carry path separators: joining "../../secret.txt" onto the
+     * upload directory writes outside it. Keeping only the last segment is what
+     * actually stops that — a leftover ".." with no separator left in it is an
+     * ordinary filename, not a traversal.
+     *
+     * Characters are filtered rather than allow-listed so that a Vietnamese
+     * filename survives intact; an allow-list of A-Z would replace most of it
+     * with underscores.
+     */
+    private safeFileName(originalName: string): string {
+        const lastSegment = originalName.split(/[\\/]/).pop() ?? "";
+
+        const cleaned = Array.from(lastSegment)
+            // `char >= " "` drops every control character, since they all sort
+            // below the space.
+            .filter((char) => char >= " " && !FORBIDDEN_NAME_CHARACTERS.includes(char))
+            .join("")
+            .trim();
+
+        // Leave room for the uuid prefix inside the filesystem's name limit.
+        const shortened = cleaned.slice(0, 100);
+
+        return shortened.length > 0 ? shortened : "file";
+    }
+
     /**
      * Saves a CV file to the uploads/resumes directory.
      * @param file The uploaded CV file.
@@ -13,7 +47,7 @@ export class FileStorageService {
         await fs.mkdir(uploadDir, { recursive: true });
 
         // Generate unique file name and store its path
-        const storedFileName = `${randomUUID()}-${file.originalname}`;
+        const storedFileName = `${randomUUID()}-${this.safeFileName(file.originalname)}`;
         const storedFilePath = path.join(uploadDir, storedFileName);
 
         // Write the file to the file system
@@ -31,14 +65,14 @@ export class FileStorageService {
     public async saveAvatar(avatar: Express.Multer.File): Promise<string> {
         const uploadDir = path.resolve("uploads/avatars");
         await fs.mkdir(uploadDir, { recursive: true });
-        
+
         // Generate unique file name and store its path
-        const storedFileName = `${randomUUID()}-${avatar.originalname}`;
+        const storedFileName = `${randomUUID()}-${this.safeFileName(avatar.originalname)}`;
         const storedFilePath = path.join(uploadDir, storedFileName);
-        
+
         // Write the file to the file system
         await fs.writeFile(storedFilePath, avatar.buffer);
-        
+
         // Return the file path as a URL
         return `/uploads/avatars/${storedFileName}`;
     }
@@ -70,6 +104,14 @@ export class FileStorageService {
         }
 
         const absolutePath = path.resolve(relativePath);
+
+        // The prefix check above only says the stored value *looks* like an
+        // upload path. This says the resolved result actually is one, so a row
+        // holding ".." cannot unlink a file outside the upload directory.
+        const uploadsRoot = path.resolve("uploads");
+        if (!absolutePath.startsWith(uploadsRoot + path.sep)) {
+            return;
+        }
 
         try {
             // Check if file exists before trying to delete it
