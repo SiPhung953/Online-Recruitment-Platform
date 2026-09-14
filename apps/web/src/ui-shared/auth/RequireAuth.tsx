@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { useAuth } from "./AuthContext"
 import { RoleConstant, type RoleName } from "./RoleConstant"
+import { homePathFor } from "./HomePath"
 
 interface RequireAuthProps {
   /** Restrict to one persona. Omit to allow any logged-in user. */
@@ -25,7 +26,9 @@ export default function RequireAuth({ role }: RequireAuthProps) {
   }
 
   if (role && roleId !== RoleConstant[role]) {
-    return <Navigate to="/dashboard" replace />
+    // Send them to their own home rather than a fixed page: /dashboard is the
+    // Job Seeker's, and an employer landing there would only be bounced again.
+    return <Navigate to={homePathFor(roleId)} replace />
   }
 
   return <Outlet />
