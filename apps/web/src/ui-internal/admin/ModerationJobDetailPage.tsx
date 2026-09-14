@@ -16,15 +16,9 @@ import {
 } from "@/client"
 import type { ModerationJobDetailResponse } from "@/client/types.gen"
 import { formatDate, formatDeadline } from "@/ui-shared/format/DateFormat"
+import { formatEmploymentType } from "@/ui-shared/format/EmploymentTypeFormat"
 import RejectJobDialog from "./components/RejectJobDialog"
 import DeleteJobDialog from "./components/DeleteJobDialog"
-
-function formatEmploymentType(value: string) {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" ")
-}
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (

@@ -4,6 +4,7 @@ import type { MyJobListItemDto } from "@/client/types.gen"
 import JobStatusBadge, { type JobStatus } from "./JobStatusBadge"
 import { getAvailableActions, type JobAction } from "../jobActions"
 import { formatDate, formatDeadline, isPastDeadline } from "@/ui-shared/format/DateFormat"
+import { formatEmploymentType } from "@/ui-shared/format/EmploymentTypeFormat"
 
 interface JobPostingCardProps {
   job: MyJobListItemDto
@@ -16,13 +17,6 @@ const ACTION_LABELS: Record<JobAction, string> = {
   CLOSE: "Close",
   REOPEN: "Re-open",
   DELETE: "Delete",
-}
-
-function formatEmploymentType(value: string) {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" ")
 }
 
 export default function JobPostingCard({ job, onView, onAction }: JobPostingCardProps) {
