@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApplyJobsData, ApplyJobsResponses, ApproveJobData, ApproveJobResponses, AuthenticateUserData, AuthenticateUserResponses, ChangeAvatarData, ChangeAvatarResponses, ChangePasswordData, ChangePasswordResponses, CloseJobPostingData, CloseJobPostingResponses, CreateCompanyData, CreateCompanyResponses, CreateJobPostingData, CreateJobPostingResponses, DeleteJobData, DeleteJobPostingData, DeleteJobPostingResponses, DeleteJobResponses, DeleteResumeData, DeleteResumeResponses, GetCompanyData, GetCompanyProfileData, GetCompanyProfileResponses, GetCompanyResponses, GetJobApplicationDetailData, GetJobApplicationDetailResponses, GetJobApplicationsData, GetJobApplicationsResponses, GetJobDetail2Data, GetJobDetail2Responses, GetJobDetailData, GetJobDetailResponses, GetJobPreferenceData, GetJobPreferenceResponses, GetJobsData, GetJobsResponses, GetMyApplicationsData, GetMyApplicationsResponses, GetMyJobDetailData, GetMyJobDetailResponses, GetMyJobsData, GetMyJobsResponses, GetMyProfileData, GetMyProfileResponses, GetMyResumesData, GetMyResumesResponses, LogoutUserData, LogoutUserResponses, PutApplicationUnderReviewData, PutApplicationUnderReviewResponses, RegisterUserData, RegisterUserResponses, RejectJobData, RejectJobResponses, ReopenJobPostingData, ReopenJobPostingResponses, RequestPasswordResetData, RequestPasswordResetResponses, ResetPasswordData, ResetPasswordResponses, SearchJobsData, SearchJobsResponses, UpdateApplicationStatusData, UpdateApplicationStatusResponses, UpdateCompanyData, UpdateCompanyResponses, UpdateJobPostingData, UpdateJobPostingResponses, UpdateJobPreferenceData, UpdateJobPreferenceResponses, UpdatePersonalInformationData, UpdatePersonalInformationResponses, UploadResumeData, UploadResumeResponses, ValidateResetTokenData, ValidateResetTokenResponses, WithdrawApplicationData, WithdrawApplicationResponses } from './types.gen';
+import type { ApplyJobsData, ApplyJobsResponses, ApproveJobPostingData, ApproveJobPostingResponses, AuthenticateUserData, AuthenticateUserResponses, BanUserData, BanUserResponses, ChangeAvatarData, ChangeAvatarResponses, ChangePasswordData, ChangePasswordResponses, CloseJobPostingData, CloseJobPostingResponses, CreateCompanyData, CreateCompanyResponses, CreateJobPostingData, CreateJobPostingResponses, DeleteJobPostingData, DeleteJobPostingResponses, DeleteResumeData, DeleteResumeResponses, GetAuditLogsData, GetAuditLogsResponses, GetCompanyData, GetCompanyProfileData, GetCompanyProfileResponses, GetCompanyResponses, GetJobApplicationDetailData, GetJobApplicationDetailResponses, GetJobApplicationsData, GetJobApplicationsResponses, GetJobDetailData, GetJobDetailResponses, GetJobPreferenceData, GetJobPreferenceResponses, GetModerationJobDetailData, GetModerationJobDetailResponses, GetModerationJobsData, GetModerationJobsResponses, GetMyApplicationsData, GetMyApplicationsResponses, GetMyJobDetailData, GetMyJobDetailResponses, GetMyJobsData, GetMyJobsResponses, GetMyProfileData, GetMyProfileResponses, GetMyResumesData, GetMyResumesResponses, GetUserDetailData, GetUserDetailResponses, GetUsersData, GetUsersResponses, LogoutUserData, LogoutUserResponses, PutApplicationUnderReviewData, PutApplicationUnderReviewResponses, RegisterUserData, RegisterUserResponses, RejectJobPostingData, RejectJobPostingResponses, RemoveJobPostingData, RemoveJobPostingResponses, ReopenJobPostingData, ReopenJobPostingResponses, RequestPasswordResetData, RequestPasswordResetResponses, ResetPasswordData, ResetPasswordResponses, SearchJobsData, SearchJobsResponses, UnbanUserData, UnbanUserResponses, UpdateApplicationStatusData, UpdateApplicationStatusResponses, UpdateCompanyData, UpdateCompanyResponses, UpdateJobPostingData, UpdateJobPostingResponses, UpdateJobPreferenceData, UpdateJobPreferenceResponses, UpdatePersonalInformationData, UpdatePersonalInformationResponses, UploadResumeData, UploadResumeResponses, ValidateResetTokenData, ValidateResetTokenResponses, WithdrawApplicationData, WithdrawApplicationResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -18,28 +18,56 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
     meta?: Record<string, unknown>;
 };
 
-export const getJobs = <ThrowOnError extends boolean = false>(options?: Options<GetJobsData, ThrowOnError>) => (options?.client ?? client).get<GetJobsResponses, unknown, ThrowOnError>({
+export const getUsers = <ThrowOnError extends boolean = false>(options?: Options<GetUsersData, ThrowOnError>) => (options?.client ?? client).get<GetUsersResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users',
+    ...options
+});
+
+export const getUserDetail = <ThrowOnError extends boolean = false>(options: Options<GetUserDetailData, ThrowOnError>) => (options.client ?? client).get<GetUserDetailResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users/{userId}',
+    ...options
+});
+
+export const banUser = <ThrowOnError extends boolean = false>(options: Options<BanUserData, ThrowOnError>) => (options.client ?? client).patch<BanUserResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users/{userId}/ban',
+    ...options
+});
+
+export const unbanUser = <ThrowOnError extends boolean = false>(options: Options<UnbanUserData, ThrowOnError>) => (options.client ?? client).patch<UnbanUserResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users/{userId}/unban',
+    ...options
+});
+
+export const getModerationJobs = <ThrowOnError extends boolean = false>(options?: Options<GetModerationJobsData, ThrowOnError>) => (options?.client ?? client).get<GetModerationJobsResponses, unknown, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/admin/jobs',
     ...options
 });
 
-export const getJobDetail = <ThrowOnError extends boolean = false>(options: Options<GetJobDetailData, ThrowOnError>) => (options.client ?? client).get<GetJobDetailResponses, unknown, ThrowOnError>({
+export const getModerationJobDetail = <ThrowOnError extends boolean = false>(options: Options<GetModerationJobDetailData, ThrowOnError>) => (options.client ?? client).get<GetModerationJobDetailResponses, unknown, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/admin/jobs/{jobId}',
     ...options
 });
 
-export const approveJob = <ThrowOnError extends boolean = false>(options: Options<ApproveJobData, ThrowOnError>) => (options.client ?? client).patch<ApproveJobResponses, unknown, ThrowOnError>({
+export const approveJobPosting = <ThrowOnError extends boolean = false>(options: Options<ApproveJobPostingData, ThrowOnError>) => (options.client ?? client).patch<ApproveJobPostingResponses, unknown, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/admin/jobs/{jobId}/approve',
     ...options
 });
 
-export const rejectJob = <ThrowOnError extends boolean = false>(options: Options<RejectJobData, ThrowOnError>) => (options.client ?? client).patch<RejectJobResponses, unknown, ThrowOnError>({
+export const rejectJobPosting = <ThrowOnError extends boolean = false>(options: Options<RejectJobPostingData, ThrowOnError>) => (options.client ?? client).patch<RejectJobPostingResponses, unknown, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/admin/jobs/{jobId}/reject',
@@ -50,7 +78,7 @@ export const rejectJob = <ThrowOnError extends boolean = false>(options: Options
     }
 });
 
-export const deleteJob = <ThrowOnError extends boolean = false>(options: Options<DeleteJobData, ThrowOnError>) => (options.client ?? client).patch<DeleteJobResponses, unknown, ThrowOnError>({
+export const removeJobPosting = <ThrowOnError extends boolean = false>(options: Options<RemoveJobPostingData, ThrowOnError>) => (options.client ?? client).patch<RemoveJobPostingResponses, unknown, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/admin/jobs/{jobId}/delete',
@@ -59,6 +87,13 @@ export const deleteJob = <ThrowOnError extends boolean = false>(options: Options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+export const getAuditLogs = <ThrowOnError extends boolean = false>(options?: Options<GetAuditLogsData, ThrowOnError>) => (options?.client ?? client).get<GetAuditLogsResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/logs',
+    ...options
 });
 
 export const getMyResumes = <ThrowOnError extends boolean = false>(options?: Options<GetMyResumesData, ThrowOnError>) => (options?.client ?? client).get<GetMyResumesResponses, unknown, ThrowOnError>({
@@ -158,7 +193,7 @@ export const searchJobs = <ThrowOnError extends boolean = false>(options?: Optio
     ...options
 });
 
-export const getJobDetail2 = <ThrowOnError extends boolean = false>(options: Options<GetJobDetail2Data, ThrowOnError>) => (options.client ?? client).get<GetJobDetail2Responses, unknown, ThrowOnError>({
+export const getJobDetail = <ThrowOnError extends boolean = false>(options: Options<GetJobDetailData, ThrowOnError>) => (options.client ?? client).get<GetJobDetailResponses, unknown, ThrowOnError>({
     responseType: 'json',
     url: '/jobs/{jobId}',
     ...options

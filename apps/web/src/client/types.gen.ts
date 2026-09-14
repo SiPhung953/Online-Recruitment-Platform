@@ -4,6 +4,52 @@ export type ClientOptions = {
     baseURL: 'http://localhost:3000' | (string & {});
 };
 
+export type UserStatus = 'ACTIVE' | 'BANNED';
+
+export type UserListItemDto = {
+    userId: string;
+    email: string;
+    fullName: string | null;
+    roleId: number;
+    status: UserStatus;
+    createdAt: string;
+};
+
+export type UserListResponse = {
+    items: Array<UserListItemDto>;
+};
+
+export type UserDetailResponse = {
+    userId: string;
+    email: string;
+    roleId: number;
+    status: UserStatus;
+    createdAt: string;
+    fullName: string | null;
+    phoneNumber: string | null;
+    avatarUrl: string | null;
+    headline: string | null;
+    profileUpdatedAt: string | null;
+    profileVisibility: 'PRIVATE' | 'VISIBLE_TO_EMPLOYERS';
+    jobSearchStatus: 'OPEN_TO_WORK' | 'NOT_LOOKING';
+    desiredJobTitle: string | null;
+    preferredLocation: string | null;
+};
+
+export type BanUserResponse = {
+    userId: string;
+    status: 'BANNED';
+    bannedAt: string;
+    message: string;
+};
+
+export type UnbanUserResponse = {
+    userId: string;
+    status: 'ACTIVE';
+    unbannedAt: string;
+    message: string;
+};
+
 export type JobStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'CLOSED' | 'EXPIRED' | 'DELETED';
 
 export type ModerationJobListItemDto = {
@@ -71,6 +117,27 @@ export type DeleteJobResponse = {
 
 export type DeleteJobRequest = {
     deletionReason: string;
+};
+
+export type LogAction = 'USER_REGISTERED' | 'USER_LOGGED_IN' | 'USER_LOGGED_OUT' | 'USER_LOGIN_FAILED' | 'USER_BANNED' | 'USER_UNBANNED' | 'PASSWORD_RESET_REQUESTED' | 'PASSWORD_RESET_COMPLETED' | 'PASSWORD_CHANGED' | 'COMPANY_CREATED' | 'COMPANY_UPDATED' | 'JOB_CREATED' | 'JOB_UPDATED' | 'JOB_APPROVED' | 'JOB_REJECTED' | 'JOB_REOPENED' | 'JOB_CLOSED' | 'JOB_DELETED' | 'JOB_EXPIRED' | 'APPLICATION_SUBMITTED' | 'APPLICATION_UNDER_REVIEW' | 'APPLICATION_STATUS_UPDATED' | 'APPLICATION_WITHDRAWN' | 'RESUME_UPLOADED' | 'RESUME_DELETED' | 'PROFILE_UPDATED' | 'AVATAR_CHANGED' | 'JOB_PREFERENCE_UPDATED' | 'SYSTEM_ERROR';
+
+export type LogTargetType = 'USER' | 'JOB' | 'APPLICATION' | 'RESUME' | 'COMPANY' | 'AUTH' | 'SYSTEM';
+
+export type LogLevel = 'INFO' | 'WARN' | 'ERROR';
+
+export type AuditLogListItemDto = {
+    logId: string;
+    actorId?: string;
+    action: LogAction;
+    targetId?: string;
+    targetType: LogTargetType;
+    level: LogLevel;
+    message: string;
+    createdAt: string;
+};
+
+export type AuditLogListResponse = {
+    items: Array<AuditLogListItemDto>;
 };
 
 export type ResumeDto = {
@@ -449,7 +516,79 @@ export type ResetPasswordRequest = {
     newPassword: string;
 };
 
-export type GetJobsData = {
+export type GetUsersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        email?: string;
+    };
+    url: '/admin/users';
+};
+
+export type GetUsersResponses = {
+    /**
+     * OK
+     */
+    200: UserListResponse;
+};
+
+export type GetUsersResponse = GetUsersResponses[keyof GetUsersResponses];
+
+export type GetUserDetailData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/admin/users/{userId}';
+};
+
+export type GetUserDetailResponses = {
+    /**
+     * OK
+     */
+    200: UserDetailResponse;
+};
+
+export type GetUserDetailResponse = GetUserDetailResponses[keyof GetUserDetailResponses];
+
+export type BanUserData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/admin/users/{userId}/ban';
+};
+
+export type BanUserResponses = {
+    /**
+     * OK
+     */
+    200: BanUserResponse;
+};
+
+export type BanUserResponse2 = BanUserResponses[keyof BanUserResponses];
+
+export type UnbanUserData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/admin/users/{userId}/unban';
+};
+
+export type UnbanUserResponses = {
+    /**
+     * OK
+     */
+    200: UnbanUserResponse;
+};
+
+export type UnbanUserResponse2 = UnbanUserResponses[keyof UnbanUserResponses];
+
+export type GetModerationJobsData = {
     body?: never;
     path?: never;
     query?: {
@@ -458,16 +597,16 @@ export type GetJobsData = {
     url: '/admin/jobs';
 };
 
-export type GetJobsResponses = {
+export type GetModerationJobsResponses = {
     /**
      * OK
      */
     200: ModerationJobListResponse;
 };
 
-export type GetJobsResponse = GetJobsResponses[keyof GetJobsResponses];
+export type GetModerationJobsResponse = GetModerationJobsResponses[keyof GetModerationJobsResponses];
 
-export type GetJobDetailData = {
+export type GetModerationJobDetailData = {
     body?: never;
     path: {
         jobId: string;
@@ -476,16 +615,16 @@ export type GetJobDetailData = {
     url: '/admin/jobs/{jobId}';
 };
 
-export type GetJobDetailResponses = {
+export type GetModerationJobDetailResponses = {
     /**
      * OK
      */
     200: ModerationJobDetailResponse;
 };
 
-export type GetJobDetailResponse2 = GetJobDetailResponses[keyof GetJobDetailResponses];
+export type GetModerationJobDetailResponse = GetModerationJobDetailResponses[keyof GetModerationJobDetailResponses];
 
-export type ApproveJobData = {
+export type ApproveJobPostingData = {
     body?: never;
     path: {
         jobId: string;
@@ -494,16 +633,16 @@ export type ApproveJobData = {
     url: '/admin/jobs/{jobId}/approve';
 };
 
-export type ApproveJobResponses = {
+export type ApproveJobPostingResponses = {
     /**
      * OK
      */
     200: ApproveJobResponse;
 };
 
-export type ApproveJobResponse2 = ApproveJobResponses[keyof ApproveJobResponses];
+export type ApproveJobPostingResponse = ApproveJobPostingResponses[keyof ApproveJobPostingResponses];
 
-export type RejectJobData = {
+export type RejectJobPostingData = {
     body: RejectJobRequest;
     path: {
         jobId: string;
@@ -512,16 +651,16 @@ export type RejectJobData = {
     url: '/admin/jobs/{jobId}/reject';
 };
 
-export type RejectJobResponses = {
+export type RejectJobPostingResponses = {
     /**
      * OK
      */
     200: RejectJobResponse;
 };
 
-export type RejectJobResponse2 = RejectJobResponses[keyof RejectJobResponses];
+export type RejectJobPostingResponse = RejectJobPostingResponses[keyof RejectJobPostingResponses];
 
-export type DeleteJobData = {
+export type RemoveJobPostingData = {
     body: DeleteJobRequest;
     path: {
         jobId: string;
@@ -530,14 +669,30 @@ export type DeleteJobData = {
     url: '/admin/jobs/{jobId}/delete';
 };
 
-export type DeleteJobResponses = {
+export type RemoveJobPostingResponses = {
     /**
      * OK
      */
     200: DeleteJobResponse;
 };
 
-export type DeleteJobResponse2 = DeleteJobResponses[keyof DeleteJobResponses];
+export type RemoveJobPostingResponse = RemoveJobPostingResponses[keyof RemoveJobPostingResponses];
+
+export type GetAuditLogsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/logs';
+};
+
+export type GetAuditLogsResponses = {
+    /**
+     * OK
+     */
+    200: AuditLogListResponse;
+};
+
+export type GetAuditLogsResponse = GetAuditLogsResponses[keyof GetAuditLogsResponses];
 
 export type GetMyResumesData = {
     body?: never;
@@ -747,7 +902,7 @@ export type SearchJobsResponses = {
 
 export type SearchJobsResponse2 = SearchJobsResponses[keyof SearchJobsResponses];
 
-export type GetJobDetail2Data = {
+export type GetJobDetailData = {
     body?: never;
     path: {
         jobId: string;
@@ -756,14 +911,14 @@ export type GetJobDetail2Data = {
     url: '/jobs/{jobId}';
 };
 
-export type GetJobDetail2Responses = {
+export type GetJobDetailResponses = {
     /**
      * OK
      */
     200: GetJobDetailResponse;
 };
 
-export type GetJobDetail2Response = GetJobDetail2Responses[keyof GetJobDetail2Responses];
+export type GetJobDetailResponse2 = GetJobDetailResponses[keyof GetJobDetailResponses];
 
 export type ApplyJobsData = {
     body: ApplyJobRequest;
