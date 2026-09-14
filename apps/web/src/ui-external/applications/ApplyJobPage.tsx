@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useParams, useNavigate, Link, useLocation } from "react-router-dom"
+import { useParams, useNavigate, Link } from "react-router-dom"
 import Header from "@/ui-external/landing/components/Header"
 import Footer from "@/ui-external/landing/components/Footer"
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/ui-shared/components/ui/card"
@@ -16,30 +16,18 @@ import {
   Plus,
 } from "@phosphor-icons/react"
 import { getJobDetail, getMyResumes, applyJobs } from "@/client"
-import type { ResumeDto } from "@/client/types.gen"
+import type { ResumeDto, GetJobDetailResponse } from "@/client/types.gen"
 import ResumeSelector from "./components/ResumeSelector"
 import ErrorAlert from "@/ui-shared/components/ErrorAlert"
 import LoadingSpinner from "@/ui-shared/components/LoadingSpinner"
-import { mockJobs, mockCompanies } from "../public/mockData"
-
-interface JobInfo {
-  id: string
-  title: string
-  location: string
-  employmentType: string
-  company: {
-    id: string
-    name: string
-  }
-}
+import { formatEmploymentType } from "@/ui-shared/format/EmploymentTypeFormat"
 
 export default function ApplyJobPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
-  const routerLocation = useLocation()
 
   // State
-  const [job, setJob] = useState<JobInfo | null>(null)
+  const [job, setJob] = useState<GetJobDetailResponse | null>(null)
   const [resumes, setResumes] = useState<ResumeDto[]>([])
   const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null)
   
@@ -64,51 +52,14 @@ export default function ApplyJobPage() {
       setPageLoading(true)
       setError(null)
       try {
-        // 1. Load job details (first try Router state, then API, then Mock data fallback)
-        let jobDetails: JobInfo | null = null
-
-        if (routerLocation.state?.job && routerLocation.state?.company) {
-          const sJob = routerLocation.state.job
-          const sComp = routerLocation.state.company
-          jobDetails = {
-            id: sJob.id,
-            title: sJob.title,
-            location: sJob.location,
-            employmentType: sJob.employmentType,
-            company: {
-              id: sComp.id,
-              name: sComp.name,
-            },
-          }
-        } else {
-          try {
-            const jobRes = await getJobDetail({ path: { jobId }, throwOnError: true })
-            if (jobRes.data) {
-              jobDetails = jobRes.data as JobInfo
-            }
-          } catch (apiErr) {
-            // API failed or job not found in DB yet, try mock data lookup
-            const mJob = mockJobs.find((j) => j.id === jobId)
-            const mComp = mJob ? mockCompanies.find((c) => c.id === mJob.companyId) : null
-            if (mJob && mComp) {
-              jobDetails = {
-                id: mJob.id,
-                title: mJob.title,
-                location: mJob.location,
-                employmentType: mJob.employmentType,
-                company: {
-                  id: mComp.id,
-                  name: mComp.name,
-                },
-              }
-            }
-          }
-        }
-
-        if (!jobDetails) {
+        // 1. Load job details. The endpoint serves only postings that are
+        //    ACTIVE and inside their deadline, so a failure here means the job
+        //    cannot be applied to — which is what the error state should say.
+        const jobRes = await getJobDetail({ path: { jobId }, throwOnError: true })
+        if (!jobRes.data) {
           throw new Error("Job opportunity not found.")
         }
-        setJob(jobDetails)
+        setJob(jobRes.data)
 
         // 2. Load resumes
         const resumeRes = await getMyResumes({ throwOnError: true })
@@ -127,7 +78,7 @@ export default function ApplyJobPage() {
     }
 
     fetchData()
-  }, [jobId, routerLocation.state])
+  }, [jobId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -161,19 +112,6 @@ export default function ApplyJobPage() {
       }
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const getEmploymentTypeLabel = (type: string) => {
-    switch (type) {
-      case "ON_SITE":
-        return "On-site"
-      case "REMOTE":
-        return "Remote"
-      case "HYBRID":
-        return "Hybrid"
-      default:
-        return type
     }
   }
 
@@ -273,7 +211,7 @@ export default function ApplyJobPage() {
                         <span className="text-muted-foreground/30 font-bold">&middot;</span>
                         <span className="text-muted-foreground flex items-center gap-1">
                           <Briefcase size={14} />
-                          {job && getEmploymentTypeLabel(job.employmentType)}
+                          {job && formatEmploymentType(job.employmentType)}
                         </span>
                       </div>
                     </div>
