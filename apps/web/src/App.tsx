@@ -15,10 +15,11 @@ import MyApplicationsPage from "@/ui-external/applications/MyApplicationsPage"
 import MyJobPostingsPage from "@/ui-external/employer-job-management/MyJobPostingsPage"
 import MyCompanyPage from "@/ui-external/employer-company/MyCompanyPage"
 import PostJobPage from "@/ui-external/employer-job-management/PostJobPage"
+import { RoleConstant } from "@/ui-shared/auth/RoleConstant"
 
 function AppRoutes() {
   const navigate = useNavigate()
-  const { isLoggedIn, email, isEmployer, login } = useAuth()
+  const { isLoggedIn, email, isEmployer, isAdmin, login } = useAuth()
 
   const handleLoginSuccess = (accessToken: string, userEmail: string, roleId: number) => {
     login(accessToken, userEmail, roleId)
@@ -67,6 +68,18 @@ function AppRoutes() {
         <Route path="/employer/company" element={<MyCompanyPage />} />
         <Route path="/employer/jobs" element={<MyJobPostingsPage />} />
         <Route path="/employer/jobs/new" element={<PostJobPage />} />
+      </Route>
+
+      {/* ---------- Admin (Back-Office Worker) only ---------- */}
+      <Route element={<RequireAuth role="ADMIN" />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/jobs" replace />} />
+          <Route path="jobs" element={<ModerationJobsPage />} />
+          <Route path="jobs/:jobId" element={<ModerationJobDetailPage />} />
+          <Route path="users" element={<UserManagementPage />} />
+          <Route path="users/:userId" element={<UserDetailPage />} />
+          <Route path="logs" element={<AuditLogPage />} />
+        </Route>
       </Route>
 
       {/* ---------- Fallback ---------- */}

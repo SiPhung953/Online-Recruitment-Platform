@@ -11,6 +11,7 @@ interface AuthState {
   roleId: number | null
   isEmployer: boolean
   isJobSeeker: boolean
+  isAdmin: boolean
   login: (accessToken: string, email: string, roleId: number) => void
   logout: () => void
 }
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ...session,
     isEmployer: session.roleId === RoleConstant.EMPLOYER,
     isJobSeeker: session.roleId === RoleConstant.JOB_SEEKER,
+    isAdmin: session.roleId === RoleConstant.ADMIN,
     login,
     logout,
   }
