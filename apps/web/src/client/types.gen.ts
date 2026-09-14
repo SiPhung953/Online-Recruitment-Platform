@@ -245,6 +245,10 @@ export type JobListItemDto = {
     title: string;
     employmentType: EmploymentType;
     location: string;
+    company: {
+        name: string;
+        id: string;
+    };
 };
 
 export type SearchJobsResponse = {
@@ -260,8 +264,10 @@ export type GetJobDetailResponse = {
     id: string;
     title: string;
     description: string;
+    requirement: string;
     location: string;
     employmentType: EmploymentType;
+    deadline: string;
     company: {
         name: string;
         id: string;
