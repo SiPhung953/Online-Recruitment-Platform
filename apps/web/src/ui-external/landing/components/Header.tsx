@@ -1,28 +1,57 @@
 import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/ui-shared/components/ui/button"
-import { GraduationCap, List, X, User, CaretDown, SignOut, Briefcase } from "@phosphor-icons/react"
-import { logoutUser } from '@/client'
+import {
+  GraduationCap,
+  List,
+  X,
+  User,
+  CaretDown,
+  SignOut,
+  Briefcase,
+  Buildings,
+  ShieldCheck,
+  SquaresFour,
+  type Icon,
+} from "@phosphor-icons/react"
+import { logoutUser } from "@/client"
+import { useAuth } from "@/ui-shared/auth/AuthContext"
+
+interface NavItem {
+  to: string
+  label: string
+  icon: Icon
+}
+
+/** Top-bar links for the two personas that have a section of their own. */
+const EMPLOYER_NAV: NavItem[] = [
+  { to: "/employer/jobs", label: "My Job Postings", icon: Briefcase },
+  { to: "/employer/company", label: "Company Profile", icon: Buildings },
+]
+
+const ADMIN_NAV: NavItem[] = [
+  { to: "/admin/jobs", label: "Admin Console", icon: ShieldCheck },
+]
+
+const JOB_SEEKER_NAV: NavItem[] = [
+  { to: "/dashboard", label: "Dashboard", icon: SquaresFour },
+  { to: "/applications", label: "My Applications", icon: Briefcase },
+  { to: "/profile", label: "My Profile", icon: User },
+]
 
 export default function Header() {
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userEmail, setUserEmail] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken")
-    const email = localStorage.getItem("userEmail")
-    if (token) {
-      setIsLoggedIn(true)
-      setUserEmail(email || "")
-    } else {
-      setIsLoggedIn(false)
-      setUserEmail("")
-    }
-  }, [])
+  // The session lives in one place. Reading localStorage here as well would
+  // give the header its own copy that nothing updates when the user logs out.
+  const { isLoggedIn, email, isEmployer, isAdmin, logout } = useAuth()
+
+  // Which persona's links to show. A logged-out visitor gets the public set.
+  const roleNav = isEmployer ? EMPLOYER_NAV : isAdmin ? ADMIN_NAV : null
+  const menuItems = isEmployer ? EMPLOYER_NAV : isAdmin ? ADMIN_NAV : JOB_SEEKER_NAV
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -35,16 +64,19 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleLogout = () => {
-    void logoutUser().catch(() => {})
-    // Read token from localStorage, .catch swallow rejection (expire token)
-    localStorage.removeItem("accessToken")
-    localStorage.removeItem("userEmail")
-    setIsLoggedIn(false)
-    setUserEmail("")
+  const handleLogout = async () => {
+    // The logout endpoint is authenticated, so the token has to survive until
+    // the request has been sent. An expired token still logs the user out
+    // locally — that is what the empty catch is for.
+    try {
+      await logoutUser()
+    } catch {
+      // ignore
+    }
+    logout()
     setMenuOpen(false)
+    setIsOpen(false)
     navigate("/")
-    window.location.reload()
   }
 
   return (
@@ -65,38 +97,52 @@ export default function Header() {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link
-              to="/"
-              className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
-            >
-              Search Jobs
-            </Link>
-            <a
-              href="#employer-cta"
-              className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
-            >
-              For Employers
-            </a>
-            <a
-              href="#about"
-              onClick={(e) => {
-                e.preventDefault()
-                alert("About page is a placeholder for this thesis MVP.")
-              }}
-              className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
-            >
-              About
-            </a>
-            <a
-              href="#resources"
-              onClick={(e) => {
-                e.preventDefault()
-                alert("Resources center is a placeholder for this thesis MVP.")
-              }}
-              className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
-            >
-              Resources
-            </a>
+            {roleNav ? (
+              roleNav.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ))
+            ) : (
+              <>
+                <Link
+                  to="/"
+                  className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
+                >
+                  Search Jobs
+                </Link>
+                <a
+                  href="#employer-cta"
+                  className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
+                >
+                  For Employers
+                </a>
+                <a
+                  href="#about"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    alert("About page is a placeholder for this thesis MVP.")
+                  }}
+                  className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
+                >
+                  About
+                </a>
+                <a
+                  href="#resources"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    alert("Resources center is a placeholder for this thesis MVP.")
+                  }}
+                  className="text-xs font-semibold uppercase tracking-wider text-foreground/80 hover:text-brand transition-colors"
+                >
+                  Resources
+                </a>
+              </>
+            )}
           </nav>
 
           {/* Desktop CTA Buttons / User Account Menu */}
@@ -113,7 +159,7 @@ export default function Header() {
                   <div className="flex size-6 items-center justify-center bg-brand/10 text-brand">
                     <User size={13} weight="bold" />
                   </div>
-                  <span className="max-w-[130px] truncate">{userEmail}</span>
+                  <span className="max-w-[130px] truncate">{email}</span>
                   <CaretDown
                     size={12}
                     weight="bold"
@@ -125,28 +171,23 @@ export default function Header() {
                 {menuOpen && (
                   <div className="absolute right-0 top-full mt-1.5 w-52 border border-foreground/10 bg-background shadow-lg z-50">
                     <div className="px-3 py-2.5 border-b border-foreground/10">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Signed in as</p>
-                      <p className="text-xs font-semibold text-foreground truncate mt-0.5">{userEmail}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Signed in as
+                      </p>
+                      <p className="text-xs font-semibold text-foreground truncate mt-0.5">{email}</p>
                     </div>
                     <div className="py-1 space-y-0.5">
-                      <Link
-                        id="my-profile-link"
-                        to="/dashboard"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-foreground/80 hover:text-brand hover:bg-brand/5 transition-colors"
-                      >
-                        <User size={13} />
-                        My Profile
-                      </Link>
-                      <Link
-                        id="my-applications-link"
-                        to="/applications"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-foreground/80 hover:text-brand hover:bg-brand/5 transition-colors"
-                      >
-                        <Briefcase size={13} />
-                        My Applications
-                      </Link>
+                      {menuItems.map(({ to, label, icon: ItemIcon }) => (
+                        <Link
+                          key={to}
+                          to={to}
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-foreground/80 hover:text-brand hover:bg-brand/5 transition-colors"
+                        >
+                          <ItemIcon size={13} />
+                          {label}
+                        </Link>
+                      ))}
                     </div>
                     <div className="border-t border-foreground/10 py-1">
                       <button
@@ -199,69 +240,81 @@ export default function Header() {
       {isOpen && (
         <div className="md:hidden border-b border-foreground/10 bg-background/95 backdrop-blur-md">
           <div className="space-y-1.5 px-4 pt-2 pb-6">
-            <Link
-              to="/"
-              onClick={() => setIsOpen(false)}
-              className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-            >
-              Search Jobs
-            </Link>
-            <a
-              href="#employer-cta"
-              onClick={() => setIsOpen(false)}
-              className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-            >
-              For Employers
-            </a>
-            <a
-              href="#about"
-              onClick={(e) => {
-                e.preventDefault()
-                setIsOpen(false)
-                alert("About page is a placeholder for this thesis MVP.")
-              }}
-              className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-            >
-              About
-            </a>
-            <a
-              href="#resources"
-              onClick={(e) => {
-                e.preventDefault()
-                setIsOpen(false)
-                alert("Resources center is a placeholder for this thesis MVP.")
-              }}
-              className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-            >
-              Resources
-            </a>
+            {roleNav ? (
+              roleNav.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setIsOpen(false)}
+                  className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                >
+                  {item.label}
+                </Link>
+              ))
+            ) : (
+              <>
+                <Link
+                  to="/"
+                  onClick={() => setIsOpen(false)}
+                  className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                >
+                  Search Jobs
+                </Link>
+                <a
+                  href="#employer-cta"
+                  onClick={() => setIsOpen(false)}
+                  className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                >
+                  For Employers
+                </a>
+                <a
+                  href="#about"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setIsOpen(false)
+                    alert("About page is a placeholder for this thesis MVP.")
+                  }}
+                  className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                >
+                  About
+                </a>
+                <a
+                  href="#resources"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setIsOpen(false)
+                    alert("Resources center is a placeholder for this thesis MVP.")
+                  }}
+                  className="block py-2.5 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                >
+                  Resources
+                </a>
+              </>
+            )}
 
             {/* Mobile Auth Section */}
             <div className="pt-4 flex flex-col gap-2 border-t border-foreground/10 mt-3">
               {isLoggedIn ? (
                 <>
                   <div className="pb-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Signed in as</p>
-                    <p className="text-xs font-semibold text-foreground truncate mt-0.5">{userEmail}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Signed in as
+                    </p>
+                    <p className="text-xs font-semibold text-foreground truncate mt-0.5">{email}</p>
                   </div>
-                  <Link
-                    to="/profile"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 py-2 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-                  >
-                    <User size={14} />
-                    My Profile
-                  </Link>
-                  <Link
-                    to="/applications"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 py-2 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
-                  >
-                    <Briefcase size={14} />
-                    My Applications
-                  </Link>
+                  {menuItems.map(({ to, label, icon: ItemIcon }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2 py-2 text-xs font-bold uppercase tracking-wider text-foreground/80 hover:text-brand"
+                    >
+                      <ItemIcon size={14} />
+                      {label}
+                    </Link>
+                  ))}
                   <button
-                    onClick={() => { setIsOpen(false); handleLogout() }}
+                    onClick={handleLogout}
                     className="flex items-center gap-2 py-2 text-xs font-bold uppercase tracking-wider text-destructive"
                   >
                     <SignOut size={14} />
