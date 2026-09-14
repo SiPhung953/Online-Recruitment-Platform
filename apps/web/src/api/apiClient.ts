@@ -1,9 +1,10 @@
 import { client } from "../client/client.gen";
 import { clearStoredSession } from "@/ui-shared/auth/AuthContext";
+import { API_BASE_URL } from "./ApiBaseUrl";
 
 // Configure client with baseURL, auth, and the mock adapter directly
 client.setConfig({
-  baseURL: "http://localhost:3000",
+  baseURL: API_BASE_URL,
   auth: () => localStorage.getItem("accessToken") ?? "",
 });
 
