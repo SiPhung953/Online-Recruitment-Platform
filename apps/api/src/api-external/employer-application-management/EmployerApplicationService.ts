@@ -163,7 +163,7 @@ export class EmployerApplicationService {
             candidateName: application.user.userProfile?.fullName || application.user.email,
             candidateEmail: application.user.email,
             candidateHeadline: application.user.userProfile?.headline || undefined,
-            candidatePhoneNumber: application.user.userProfile?.city || undefined,
+            candidatePhoneNumber: application.user.userProfile?.phoneNumber || undefined,
             candidateCity: application.user.userProfile?.city || undefined,
             
             resumeId: application.resume?.id,
