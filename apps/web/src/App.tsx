@@ -15,6 +15,12 @@ import MyApplicationsPage from "@/ui-external/applications/MyApplicationsPage"
 import MyJobPostingsPage from "@/ui-external/employer-job-management/MyJobPostingsPage"
 import MyCompanyPage from "@/ui-external/employer-company/MyCompanyPage"
 import PostJobPage from "@/ui-external/employer-job-management/PostJobPage"
+import AdminLayout from "@/ui-internal/admin/AdminLayout"
+import ModerationJobsPage from "@/ui-internal/admin/ModerationJobsPage"
+import ModerationJobDetailPage from "@/ui-internal/admin/ModerationJobDetailPage"
+import UserManagementPage from "@/ui-internal/admin/UserManagementPage"
+import UserDetailPage from "@/ui-internal/admin/UserDetailPage"
+import AuditLogPage from "@/ui-internal/admin/AuditLogPage"
 import { RoleConstant } from "@/ui-shared/auth/RoleConstant"
 
 function AppRoutes() {
@@ -23,7 +29,9 @@ function AppRoutes() {
 
   const handleLoginSuccess = (accessToken: string, userEmail: string, roleId: number) => {
     login(accessToken, userEmail, roleId)
-    navigate(roleId === 2 ? "/employer/jobs" : "/dashboard")
+    if (roleId === RoleConstant.ADMIN) navigate("/admin/jobs")
+    else if (roleId === RoleConstant.EMPLOYER) navigate("/employer/jobs")
+    else navigate("/dashboard")
   }
 
   return (
@@ -44,7 +52,10 @@ function AppRoutes() {
         path="/login"
         element={
           isLoggedIn ? (
-            <Navigate to={isEmployer ? "/employer/jobs" : "/dashboard"} replace />
+            <Navigate
+              to={isAdmin ? "/admin/jobs" : isEmployer ? "/employer/jobs" : "/dashboard"}
+              replace
+            />
           ) : (
             <LoginPage onLoginSuccess={handleLoginSuccess} />
           )
