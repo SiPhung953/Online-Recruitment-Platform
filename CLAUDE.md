@@ -35,6 +35,7 @@ pnpm --filter api dev       # tsx watch, http://localhost:3000, Swagger UI at /d
 pnpm --filter web dev       # Vite dev server
 pnpm --filter web generate:api                              # regenerate the API client from swagger.json
 pnpm --filter api exec prisma migrate dev --name <name>     # schema change
+pnpm --filter api seed                                      # demo data (idempotent)
 ```
 
 Typecheck without running the generator: `node_modules/.bin/tsc -p apps/api --noEmit`.
@@ -49,6 +50,9 @@ HTTP → generated/routes.ts → Controller (tsoa decorators) → Service (busin
 - **Services** own all rules and all Prisma access. They receive `currentUser` and re-check role themselves (defense in depth, on top of the tsoa scope check). The banned check lives once in `authentication.ts`, not in services.
 - **`src/generated/`** — `routes.ts` and `swagger.json` are build output. Never hand-edit. OpenAPI metadata lives in `apps/api/tsoa.json`.
 - **`src/tasks/`** — system work that no persona triggers and no route reaches. `JobExpiryService` is the one example: it takes no `currentUser` and asserts no role, which is exactly why it cannot reuse a `JobManagementService` method (those all open with a role guard). `JobExpiryScheduler` holds the timer; the callback contains no business logic, so the same sweep can later be driven by a script or an endpoint without moving any rules.
+- **Recommendations** (`api-external/job-recommendation/`) are content-based filtering with a linear weighted utility function. `RecommendationScoring.ts` holds the algorithm as pure functions taking no Prisma types, so it is testable with hand-built objects and no database — and so the thesis can quote one self-contained artifact. The service fetches and the scoring file decides. Collaborative filtering is not an option at this data scale: every user is a cold start, which is the standard case content-based filtering exists to answer.
+  - Two invariants worth keeping: the weights in `SCORING_WEIGHTS` sum to 1, so a score is always in `[0, 1]` and each weight reads directly as "what this signal is worth"; and **a job with an empty `reasons` is never recommended** — the caller filters on that rather than on `score > 0`, because the recency term gives every job a small non-zero score, so ranking by score alone would just be "newest first" in disguise.
+  - The response's `basis` field (`PREFERENCES` / `LATEST` / `NOT_LOOKING`) is what lets the dashboard describe the list honestly instead of labelling everything "recommended".
 - A scheduled/background task is just a second caller of the same Service method; put the logic in a service, not in the timer callback.
 
 ## Conventions
@@ -88,6 +92,9 @@ Length caps are `400`, not `413`. Ownership checks are 404-then-403.
 - **Uploaded files are served without authentication — an accepted MVP limitation, not an oversight.** `app.ts` mounts `express.static` at `/uploads` with no auth in front of it, so `ResumeDto.fileUrl` / `EmployerApplicationResponse.resumeFileUrl` / `avatarUrl` are plain paths the browser fetches directly. UC-EMP-06 says an employer may see only the CV attached to that application — a rule the API enforces and the file server does not, so a URL, once seen, keeps working forever and can be forwarded. Closing it means a token-checking download route, which the browser cannot use from `<img src>` or `<a href>` without also changing how the frontend fetches files. Recorded as a scope cut in the use-case document under UC-EMP-06.
 
   The **write** side of the same code was hardened rather than deferred, because a traversal is a different class of problem from a guessable link: `FileStorageService.safeFileName` now keeps only the last path segment of a client-supplied filename, and `deleteFile` confines its resolved target under `uploads/`. What remains unfixed there: the stored extension still comes from the client rather than the validated MIME type (so a file declared `application/pdf` but named `.html` is served as `text/html` from the API origin), soft-deleted CVs keep their bytes on disk and stay reachable, and a replaced avatar is never unlinked.
+
+- **The demo database needs seeding, and `prisma/seed.ts` is the answer.** Before it existed the database held one company and two jobs, so every public page rendered nearly empty and the landing page's employment-type tabs looked inert with every result sharing a type. The seed writes 3 companies and 12 `ACTIVE` postings under fixed uuids with `upsert`, so it converges rather than duplicating and never touches rows created by hand. Titles overlap on purpose ("Backend Engineer" vs "Backend Developer Intern", several `… Engineer` roles) so ranking has something to separate. Seeded accounts share the password `Password123!`.
+- **Recommendation matching is substring-based, and generic words cost precision.** Measured against the seeded set: a persona wanting "Backend Engineer" in Ho Chi Minh City matches 11 of 13 postings, because the token `engineer` alone hits Site Reliability, Frontend, Machine Learning, Full Stack, QA and Data Engineer. Ranking still puts the right two first and the top-6 cutoff hides the tail, but the filter is doing little work. Levers if this matters: raise `titleMatch`, require a minimum score, or weight rarer terms higher (the step toward real TF-IDF). Related: a full title match with no location currently ties with a half title match plus a location hit, both at `0.55`.
 
 ## Future work (not urgent)
 
