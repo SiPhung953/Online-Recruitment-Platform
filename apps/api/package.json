@@ -9,7 +9,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsoa spec-and-routes && tsc && shx mkdir -p dist/email/templates && shx cp -r src/email/templates/. dist/email/templates/",
     "start": "node dist/server.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -45,5 +46,8 @@
     "shx": "^0.4.0",
     "tsx": "^4.22.3",
     "typescript-eslint": "^8.60.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }
