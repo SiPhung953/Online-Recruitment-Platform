@@ -68,7 +68,7 @@ export default function Hero({ onSearch }: HeroProps) {
               </div>
               <Input
                 type="text"
-                placeholder="Job title, keywords, or skills..."
+                placeholder="Job title or company name..."
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 className="w-full border-none h-11 pl-10 focus-visible:ring-0 focus-visible:ring-offset-0 text-xs font-medium placeholder:text-muted-foreground/60"
@@ -85,7 +85,7 @@ export default function Hero({ onSearch }: HeroProps) {
               </div>
               <Input
                 type="text"
-                placeholder="Location, Job Type (e.g. Remote, Boston, SF)..."
+                placeholder="City, district, or location..."
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full border-none h-11 pl-10 focus-visible:ring-0 focus-visible:ring-offset-0 text-xs font-medium placeholder:text-muted-foreground/60"
