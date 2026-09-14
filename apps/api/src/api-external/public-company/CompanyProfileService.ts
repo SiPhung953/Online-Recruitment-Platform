@@ -31,7 +31,11 @@ export class CompanyProfileService {
         // where status = ACTIVE
         // if no ACTIVE job exist, return empty list []
         const activeJobs: CompanyJobListItemDto[] = await prisma.job.findMany({
-            where: { companyId: companyId, status: 'ACTIVE' },
+            where: {
+                companyId: companyId,
+                status: 'ACTIVE',
+                deadline: { gt: new Date() },
+            },
             select: {
                 id: true,
                 title: true,

@@ -31,6 +31,7 @@ export class ApplicationService {
                 id: true,
                 status: true,
                 title: true,
+                deadline: true,
             },
         });
 
@@ -39,6 +40,11 @@ export class ApplicationService {
         }
         if (job.status !== "ACTIVE") {
             throw new HttpError(400, "Job posting is no longer available.");
+        }
+        // UC-JS states the precondition as two conditions — ACTIVE *and* not
+        // past the deadline — because the expiry sweep may not have run yet.
+        if (job.deadline <= new Date()) {
+            throw new HttpError(400, "This job posting is no longer accepting applications.");
         }
         // 3. Check whether Resume exist, and belong to current user
         const resume = await prisma.resume.findFirst({

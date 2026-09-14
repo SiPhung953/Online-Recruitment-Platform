@@ -47,6 +47,10 @@ export class JobDiscoveryService {
 
         const whereClause: any = {
             status: 'ACTIVE',
+            // A posting past its deadline is expired whether or not the sweep
+            // has written the status yet, so the rule is checked on every read
+            // rather than trusted from the stored value (UC-EMP-01).
+            deadline: { gt: new Date() },
         };
 
         const conditions: any[] = [];
@@ -134,6 +138,7 @@ export class JobDiscoveryService {
             where: {
                 id: jobId,
                 status: "ACTIVE",
+                deadline: { gt: new Date() },
             },
             select: {
                 id: true,
