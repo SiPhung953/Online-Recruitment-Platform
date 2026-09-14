@@ -30,7 +30,7 @@ export class JobModerationService {
         return trimmed;
     }
     
-    public async getJobs(
+    public async getModerationJobs(
         currentUser: CurrentUser, 
         jobStatus?: JobStatus
     ): Promise<ModerationJobListResponse> {
@@ -71,7 +71,7 @@ export class JobModerationService {
         return { items };
     }
 
-    public async getJobDetail(
+    public async getModerationJobDetail(
         currentUser: CurrentUser,
         jobId: string
     ): Promise<ModerationJobDetailResponse> {
@@ -134,7 +134,7 @@ export class JobModerationService {
         };
     }
 
-    public async approveJob(
+    public async approveJobPosting(
         currentUser: CurrentUser,
         jobId: string
     ): Promise<ApproveJobResponse> {
@@ -215,7 +215,7 @@ export class JobModerationService {
         };
     }
 
-    public async rejectJob(
+    public async rejectJobPosting(
         currentUser: CurrentUser,
         jobId: string,
         requestBody: RejectJobRequest
@@ -292,7 +292,7 @@ export class JobModerationService {
         };
     }
 
-    public async deleteJob(
+    public async deleteJobPosting(
         currentUser: CurrentUser,
         jobId: string,
         requestBody: DeleteJobRequest

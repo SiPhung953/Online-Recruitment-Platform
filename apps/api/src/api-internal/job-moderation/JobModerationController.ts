@@ -36,53 +36,53 @@ export class JobModerationController extends Controller {
 
     @SuccessResponse(200, "OK")
     @Get()
-    public async getJobs(
+    public async getModerationJobs(
         @Request() request: AuthenticatedRequest,
         @Query() status?: JobStatus
     ): Promise<ModerationJobListResponse> {
         this.setStatus(200)
-        return this.jobModerationService.getJobs(request.currentUser, status)
+        return this.jobModerationService.getModerationJobs(request.currentUser, status)
     }
 
     @SuccessResponse(200, "OK")
     @Get("{jobId}")
-    public async getJobDetail(
+    public async getModerationJobDetail(
         @Request() request: AuthenticatedRequest,
         @Path("jobId") jobId: string
     ): Promise<ModerationJobDetailResponse> {
         this.setStatus(200)
-        return this.jobModerationService.getJobDetail(request.currentUser, jobId)
+        return this.jobModerationService.getModerationJobDetail(request.currentUser, jobId)
     }
 
     @SuccessResponse(200, "OK")
     @Patch("{jobId}/approve")
-    public async approveJob(
+    public async approveJobPosting(
         @Request() request: AuthenticatedRequest,
         @Path("jobId") jobId: string
     ): Promise<ApproveJobResponse> {
         this.setStatus(200)
-        return this.jobModerationService.approveJob(request.currentUser, jobId)
+        return this.jobModerationService.approveJobPosting(request.currentUser, jobId)
     }
 
     @SuccessResponse(200, "OK")
     @Patch("{jobId}/reject")
-    public async rejectJob(
+    public async rejectJobPosting(
         @Request() request: AuthenticatedRequest,
         @Path("jobId") jobId: string,
         @Body() requestBody: RejectJobRequest
     ): Promise<RejectJobResponse> {
         this.setStatus(200)
-        return this.jobModerationService.rejectJob(request.currentUser, jobId, requestBody)
+        return this.jobModerationService.rejectJobPosting(request.currentUser, jobId, requestBody)
     }
 
     @SuccessResponse(200, "OK")
     @Patch("{jobId}/delete")
-    public async deleteJob(
+    public async removeJobPosting(
         @Request() request: AuthenticatedRequest,
         @Path("jobId") jobId: string,
         @Body() requestBody: DeleteJobRequest
     ): Promise<DeleteJobResponse> {
         this.setStatus(200)
-        return this.jobModerationService.deleteJob(request.currentUser, jobId, requestBody)
+        return this.jobModerationService.deleteJobPosting(request.currentUser, jobId, requestBody)
     }
 }
