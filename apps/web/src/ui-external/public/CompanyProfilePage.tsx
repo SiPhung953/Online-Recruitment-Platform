@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/ui-shared/components/ui/button";
 import { Badge } from "@/ui-shared/components/ui/badge";
@@ -9,36 +9,62 @@ import {
   MapPin,
   Briefcase,
   ArrowLeft,
-  Buildings,
   WarningCircle,
   ArrowRight,
   Info
 } from "@phosphor-icons/react";
-import { mockJobs, mockCompanies } from "./mockData";
-// TODO: Replace mock data with real data from API using fetch
-// TODO: Write a function to derive first letter of company name
+import { getCompanyProfile } from "@/client";
+import type { CompanyProfileResponse } from "@/client/types.gen";
+import LoadingSpinner from "@/ui-shared/components/LoadingSpinner";
+import { formatEmploymentType } from "@/ui-shared/format/EmploymentTypeFormat";
+import { companyInitial } from "@/ui-shared/format/CompanyInitial";
 
 export default function CompanyProfilePage() {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
 
-  const company = mockCompanies.find((c) => c.id === companyId);
-  
-  // Filter jobs: only ACTIVE postings belonging to this company
-  const activeJobs = mockJobs.filter(
-    (j) => j.companyId === companyId && j.status === "ACTIVE"
-  );
+  const [profile, setProfile] = useState<CompanyProfileResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (company) {
-      document.title = `${company.name} Profile | AcademiaConnect`;
-    } else {
-      document.title = "Company Profile | AcademiaConnect";
-    }
-    window.scrollTo({ top: 0, behavior: "instant" });
-  }, [company]);
+    if (!companyId) return;
 
-  if (!company) {
+    const fetchProfile = async () => {
+      setLoading(true);
+      try {
+        const res = await getCompanyProfile({ path: { companyId }, throwOnError: true });
+        setProfile(res.data ?? null);
+      } catch {
+        // A missing company and an unreachable one look the same to a visitor.
+        setProfile(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [companyId]);
+
+  useEffect(() => {
+    document.title = profile
+      ? `${profile.company.name} Profile | AcademiaConnect`
+      : "Company Profile | AcademiaConnect";
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [profile]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <LoadingSpinner message="Loading company profile..." />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!profile) {
     return (
       <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
         <Header />
@@ -62,18 +88,9 @@ export default function CompanyProfilePage() {
     );
   }
 
-  const getEmploymentTypeLabel = (type: string) => {
-    switch (type) {
-      case "ON_SITE":
-        return "On-site";
-      case "REMOTE":
-        return "Remote";
-      case "HYBRID":
-        return "Hybrid";
-      default:
-        return type;
-    }
-  };
+  const { company, jobs } = profile;
+  // `companies` stores a city and an optional district, never a street address.
+  const companyLocation = company.district ? `${company.district}, ${company.city}` : company.city;
 
   return (
     <div className="min-h-screen bg-background font-sans text-foreground selection:bg-brand/20 selection:text-brand flex flex-col">
@@ -83,7 +100,7 @@ export default function CompanyProfilePage() {
       {/* Main Content */}
       <main className="flex-1 bg-secondary/10 py-10 md:py-16">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-          
+
           {/* Back Navigation Link */}
           <div className="mb-6">
             <Link
@@ -101,10 +118,10 @@ export default function CompanyProfilePage() {
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-brand" />
             <div className="p-6 md:p-8">
               <div className="flex flex-col md:flex-row items-start gap-6">
-                
-                {/* Company Logo Box */}
-                <div className={`size-20 md:size-24 flex items-center justify-center text-white text-4xl font-extrabold shrink-0 ${company.logoBg} shadow-inner`}>
-                  {company.logoText}
+
+                {/* Company initial, since no logo is stored */}
+                <div className="size-20 md:size-24 flex items-center justify-center bg-brand text-white text-4xl font-extrabold shrink-0 shadow-inner">
+                  {companyInitial(company.name)}
                 </div>
 
                 {/* Company Branding details */}
@@ -116,22 +133,8 @@ export default function CompanyProfilePage() {
                   <div className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <MapPin size={16} className="text-foreground/40" />
-                      <span className="text-foreground font-semibold">{company.address}</span>
+                      <span className="text-foreground font-semibold">{companyLocation}</span>
                     </div>
-                    {company.district && (
-                      <div className="flex items-center gap-1.5">
-                        <Buildings size={16} className="text-foreground/40" />
-                        <span>
-                          {company.district}, {company.city}
-                        </span>
-                      </div>
-                    )}
-                    {!company.district && (
-                      <div className="flex items-center gap-1.5">
-                        <Buildings size={16} className="text-foreground/40" />
-                        <span>{company.city}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -141,7 +144,7 @@ export default function CompanyProfilePage() {
 
           {/* Content Sections Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
+
             {/* Company Overview Left */}
             <div className="lg:col-span-1 space-y-6">
               <Card className="border border-foreground/10 bg-card p-6 shadow-sm">
@@ -161,19 +164,19 @@ export default function CompanyProfilePage() {
                 <h2 className="text-lg font-extrabold text-foreground mb-4 flex items-center gap-2">
                   <span>Open Opportunities</span>
                   <Badge className="bg-brand/10 border border-brand/20 text-brand text-[10px] font-bold uppercase tracking-wider rounded-none px-2 py-0.5">
-                    {activeJobs.length} {activeJobs.length === 1 ? "Job" : "Jobs"}
+                    {jobs.length} {jobs.length === 1 ? "Job" : "Jobs"}
                   </Badge>
                 </h2>
 
-                {activeJobs.length > 0 ? (
+                {jobs.length > 0 ? (
                   <div className="space-y-4">
-                    {activeJobs.map((job) => (
+                    {jobs.map((job) => (
                       <Card
                         key={job.id}
                         className="border border-foreground/10 hover:border-brand/40 bg-card hover:shadow-sm transition-all duration-300 relative group overflow-hidden"
                       >
                         <div className="absolute top-0 bottom-0 left-0 w-1 bg-brand transform scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-top" />
-                        
+
                         <CardHeader className="pb-3">
                           <div className="flex justify-between items-start gap-4">
                             <CardTitle className="text-sm md:text-base font-bold text-foreground group-hover:text-brand transition-colors">
@@ -182,22 +185,19 @@ export default function CompanyProfilePage() {
                               </Link>
                             </CardTitle>
                             <Badge className="bg-brand/10 border border-brand/20 text-brand text-[10px] font-bold uppercase tracking-wider rounded-none px-2 py-0.5 shrink-0">
-                              {getEmploymentTypeLabel(job.employmentType)}
+                              {formatEmploymentType(job.employmentType)}
                             </Badge>
                           </div>
                         </CardHeader>
-                        
+
                         <CardContent className="pb-4 pt-0">
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            
+
                             {/* Metadata */}
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-medium">
                               <span className="flex items-center gap-1">
                                 <MapPin size={14} className="text-foreground/30" />
                                 {job.location}
-                              </span>
-                              <span className="text-foreground font-bold">
-                                {job.stipend}
                               </span>
                             </div>
 
