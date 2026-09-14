@@ -12,7 +12,18 @@ import {
   ArrowRight,
   Sparkle
 } from "@phosphor-icons/react"
-import { getMyProfile, getMyApplications } from "@/client"
+import { getMyProfile, getMyApplications, getRecommendations } from "@/client"
+import type { RecommendedJobDto, RecommendationBasis } from "@/client/types.gen"
+import LoadingSpinner from "@/ui-shared/components/LoadingSpinner"
+import ErrorAlert from "@/ui-shared/components/ErrorAlert"
+import RecommendedJobCard from "./components/RecommendedJobCard"
+
+/** What the section says about itself, per the basis the API reports. */
+const BASIS_DESCRIPTION: Record<RecommendationBasis, string> = {
+  PREFERENCES: "Ranked against the job preferences you saved.",
+  LATEST: "The newest openings. Set your preferences to get tailored matches.",
+  NOT_LOOKING: "Your job search status is set to Not Looking.",
+}
 
 interface DashboardPageProps {
   userEmail: string
@@ -21,6 +32,11 @@ interface DashboardPageProps {
 export default function DashboardPage({ userEmail }: DashboardPageProps) {
   const [fullName, setFullName] = useState<string>("")
   const [appCount, setAppCount] = useState<number>(0)
+
+  const [recommendations, setRecommendations] = useState<RecommendedJobDto[]>([])
+  const [basis, setBasis] = useState<RecommendationBasis>("LATEST")
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true)
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -43,8 +59,26 @@ export default function DashboardPage({ userEmail }: DashboardPageProps) {
         // ignore
       }
     }
+    const fetchRecommendations = async () => {
+      setRecommendationsLoading(true)
+      setRecommendationsError(null)
+      try {
+        const res = await getRecommendations({ throwOnError: true })
+        setRecommendations(res.data?.items ?? [])
+        setBasis(res.data?.basis ?? "LATEST")
+      } catch (err: any) {
+        setRecommendationsError(
+          err?.response?.data?.message ||
+            "Could not load your recommendations. Please try again later."
+        )
+      } finally {
+        setRecommendationsLoading(false)
+      }
+    }
+
     fetchProfile()
     fetchApplications()
+    fetchRecommendations()
   }, [])
 
   return (
@@ -138,23 +172,41 @@ export default function DashboardPage({ userEmail }: DashboardPageProps) {
               <Card className="border border-foreground/10 shadow-sm">
                 <CardHeader className="border-b border-foreground/10 pb-4">
                   <CardTitle className="text-sm font-bold uppercase tracking-wider">Recommended Opportunities</CardTitle>
-                  <CardDescription>Tailored matches based on university recruitment partners.</CardDescription>
+                  <CardDescription>{BASIS_DESCRIPTION[basis]}</CardDescription>
                 </CardHeader>
-                <CardContent className="py-12 text-center">
-                  <div className="mx-auto max-w-sm space-y-3">
-                    <Briefcase size={36} className="mx-auto text-muted-foreground/50" />
-                    <h4 className="text-sm font-bold text-foreground">No active recommendations</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Complete your profile and preferences to help employers locate your skills and interests.
-                    </p>
-                    <div className="pt-2">
-                      <Link to="/profile">
-                        <Button variant="outline" className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border-foreground/20 hover:border-brand hover:text-brand transition-colors cursor-pointer">
-                          Fill Preferences
-                        </Button>
-                      </Link>
+                <CardContent className={recommendations.length > 0 ? "pt-6" : "py-12 text-center"}>
+                  {recommendationsLoading ? (
+                    <LoadingSpinner message="Finding opportunities for you..." />
+                  ) : recommendationsError ? (
+                    <ErrorAlert title="Recommendations Unavailable" message={recommendationsError} />
+                  ) : recommendations.length > 0 ? (
+                    <div className="space-y-3">
+                      {recommendations.map((job) => (
+                        <RecommendedJobCard key={job.id} job={job} />
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mx-auto max-w-sm space-y-3">
+                      <Briefcase size={36} className="mx-auto text-muted-foreground/50" />
+                      <h4 className="text-sm font-bold text-foreground">
+                        {basis === "NOT_LOOKING"
+                          ? "Recommendations are paused"
+                          : "No active recommendations"}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {basis === "NOT_LOOKING"
+                          ? "You have set your job search status to Not Looking. Change it to Open to Work to see matches again."
+                          : "Tell us the role and location you are after, and matching openings will appear here."}
+                      </p>
+                      <div className="pt-2">
+                        <Link to="/profile">
+                          <Button variant="outline" className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border-foreground/20 hover:border-brand hover:text-brand transition-colors cursor-pointer">
+                            {basis === "NOT_LOOKING" ? "Update Status" : "Fill Preferences"}
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
