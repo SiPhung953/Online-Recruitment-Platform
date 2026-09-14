@@ -240,6 +240,43 @@ export type ChangePasswordRequest = {
     newPassword: string;
 };
 
+export type RecommendedJobDto = {
+    id: string;
+    title: string;
+    employmentType: EmploymentType;
+    location: string;
+    company: {
+        name: string;
+        id: string;
+    };
+    /**
+     * The utility score in [0, 1]. Zero when the list is not a ranked one.
+     */
+    score: number;
+    /**
+     * Why this job was recommended, in the user's own terms. Never empty for a
+     * ranked result — a job the system cannot explain is not recommended.
+     */
+    reasons: Array<string>;
+};
+
+/**
+ * What the list actually represents, so the dashboard can say so honestly
+ * instead of labelling everything "recommended".
+ *
+ * - `PREFERENCES` — ranked against the user's stated preferences.
+ * - `LATEST`      — the user has set no preferences, so this is just the newest
+ * postings and the UI should ask them to fill preferences in.
+ * - `NOT_LOOKING` — the user set their status to Not Looking; `items` is empty
+ * because recommending at them would ignore that.
+ */
+export type RecommendationBasis = 'PREFERENCES' | 'LATEST' | 'NOT_LOOKING';
+
+export type GetRecommendationsResponse = {
+    items: Array<RecommendedJobDto>;
+    basis: RecommendationBasis;
+};
+
 export type JobListItemDto = {
     id: string;
     title: string;
@@ -888,6 +925,22 @@ export type ChangePasswordResponses = {
 };
 
 export type ChangePasswordResponse2 = ChangePasswordResponses[keyof ChangePasswordResponses];
+
+export type GetRecommendationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/recommendations';
+};
+
+export type GetRecommendationsResponses = {
+    /**
+     * OK
+     */
+    200: GetRecommendationsResponse;
+};
+
+export type GetRecommendationsResponse2 = GetRecommendationsResponses[keyof GetRecommendationsResponses];
 
 export type SearchJobsData = {
     body?: never;
