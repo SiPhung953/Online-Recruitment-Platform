@@ -1,31 +1,26 @@
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/ui-shared/components/ui/card"
 import { Badge } from "@/ui-shared/components/ui/badge"
 import { Button } from "@/ui-shared/components/ui/button"
-import { MapPin, CurrencyDollar, CalendarBlank, ArrowRight, Briefcase } from "@phosphor-icons/react"
+import { MapPin, ArrowRight, Briefcase } from "@phosphor-icons/react"
+import { searchJobs } from "@/client"
+import type { JobListItemDto, EmploymentType } from "@/client/types.gen"
+import ErrorAlert from "@/ui-shared/components/ErrorAlert"
+import LoadingSpinner from "@/ui-shared/components/LoadingSpinner"
+import { formatEmploymentType } from "@/ui-shared/format/EmploymentTypeFormat"
+import { companyInitial } from "@/ui-shared/format/CompanyInitial"
 
-interface Job {
-  id: string
-  title: string
-  company: string
-  logoText: string
-  logoBg: string
-  location: string
-  type: "Internship" | "Research" | "Full-time" | "Co-op"
-  stipend: string
-  posted: string
-  skills: string[]
-}
+type TabValue = "ALL" | EmploymentType
 
-const companyIdMap: Record<string, string> = {
-  "Google": "google",
-  "Stanford AI Lab": "stanford-ai-lab",
-  "McKinsey & Company": "mckinsey",
-  "Figma": "figma",
-  "Stripe": "stripe",
-  "Vercel": "vercel"
-};
+// The old tabs (Internship / Research / Full-time / Co-op) had no column behind
+// them. Employment type is the only categorisation the schema actually stores.
+const TABS: { value: TabValue; label: string }[] = [
+  { value: "ALL", label: "All" },
+  { value: "ON_SITE", label: "On Site" },
+  { value: "REMOTE", label: "Remote" },
+  { value: "HYBRID", label: "Hybrid" },
+]
 
 interface FeaturedJobsProps {
   searchKeyword: string
@@ -34,118 +29,45 @@ interface FeaturedJobsProps {
 }
 
 export default function FeaturedJobs({ searchKeyword, searchLocation, onResetSearch }: FeaturedJobsProps) {
-  const [activeTab, setActiveTab] = useState<string>("All")
+  const [activeTab, setActiveTab] = useState<TabValue>("ALL")
+  const [jobs, setJobs] = useState<JobListItemDto[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const mockJobs: Job[] = [
-    {
-      id: "1",
-      title: "Software Engineer Intern",
-      company: "Google",
-      logoText: "G",
-      logoBg: "bg-blue-500",
-      location: "Mountain View, CA (Hybrid)",
-      type: "Internship",
-      stipend: "$45 - $60 / hr",
-      posted: "2 days ago",
-      skills: ["React", "TypeScript", "Python"]
-    },
-    {
-      id: "2",
-      title: "Graduate AI Research Assistant",
-      company: "Stanford AI Lab",
-      logoText: "S",
-      logoBg: "bg-red-700",
-      location: "Stanford, CA (On-site)",
-      type: "Research",
-      stipend: "$32 - $42 / hr",
-      posted: "1 day ago",
-      skills: ["PyTorch", "NLP", "Machine Learning"]
-    },
-    {
-      id: "3",
-      title: "Associate Consultant (New Grad)",
-      company: "McKinsey & Company",
-      logoText: "M",
-      logoBg: "bg-indigo-950",
-      location: "New York, NY (Hybrid)",
-      type: "Full-time",
-      stipend: "$110k - $130k / yr",
-      posted: "5 days ago",
-      skills: ["Problem Solving", "Analytics", "Strategy"]
-    },
-    {
-      id: "4",
-      title: "Product Design Co-op",
-      company: "Figma",
-      logoText: "F",
-      logoBg: "bg-orange-500",
-      location: "San Francisco, CA (Hybrid)",
-      type: "Co-op",
-      stipend: "$40 - $55 / hr",
-      posted: "3 days ago",
-      skills: ["Figma", "UI/UX Design", "Prototyping"]
-    },
-    {
-      id: "5",
-      title: "Data Analyst Intern",
-      company: "Stripe",
-      logoText: "S",
-      logoBg: "bg-violet-600",
-      location: "Seattle, WA (Remote)",
-      type: "Internship",
-      stipend: "$38 - $50 / hr",
-      posted: "Just now",
-      skills: ["SQL", "Python", "Tableau"]
-    },
-    {
-      id: "6",
-      title: "Junior Full-Stack Engineer",
-      company: "Vercel",
-      logoText: "V",
-      logoBg: "bg-black",
-      location: "Remote (US/Canada)",
-      type: "Full-time",
-      stipend: "$90k - $120k / yr",
-      posted: "4 days ago",
-      skills: ["Next.js", "Tailwind CSS", "Node.js"]
+  // Keyword and location are the server's job — it matches them against the job
+  // title, the company name, and the company's city/district, which the browser
+  // cannot do against a page of results. The tab filter stays local because
+  // employment type is already on every row.
+  useEffect(() => {
+    const fetchJobs = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await searchJobs({
+          query: {
+            keyword: searchKeyword.trim() || undefined,
+            location: searchLocation.trim() || undefined,
+          },
+          throwOnError: true,
+        })
+        setJobs(res.data?.items ?? [])
+      } catch (err: any) {
+        setError(
+          err?.response?.data?.message ||
+            "Failed to load job postings. Please try again later."
+        )
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
 
-  const tabs = ["All", "Internship", "Research", "Full-time", "Co-op"]
+    fetchJobs()
+  }, [searchKeyword, searchLocation])
 
-  const filteredJobs = useMemo(() => {
-    return mockJobs.filter((job) => {
-      // 1. Tab matching
-      if (activeTab !== "All" && job.type !== activeTab) {
-        return false
-      }
-
-      // 2. Keyword matching
-      if (searchKeyword.trim() !== "") {
-        const query = searchKeyword.toLowerCase()
-        const matchTitle = job.title.toLowerCase().includes(query)
-        const matchCompany = job.company.toLowerCase().includes(query)
-        const matchSkills = job.skills.some((skill) => skill.toLowerCase().includes(query))
-        if (!matchTitle && !matchCompany && !matchSkills) {
-          return false
-        }
-      }
-
-      // 3. Location matching
-      if (searchLocation.trim() !== "") {
-        const locQuery = searchLocation.toLowerCase()
-        if (!job.location.toLowerCase().includes(locQuery)) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [activeTab, searchKeyword, searchLocation])
-
-  // const handleApplyClick = (jobTitle: string, company: string) => {
-  //   alert(`Mock Application initiated for "${jobTitle}" at ${company}. Ready for integration with job application features.`)
-  // }
+  const visibleJobs = useMemo(
+    () => (activeTab === "ALL" ? jobs : jobs.filter((job) => job.employmentType === activeTab)),
+    [jobs, activeTab]
+  )
 
   return (
     <section className="bg-background py-20 font-sans" id="search-jobs">
@@ -165,17 +87,17 @@ export default function FeaturedJobs({ searchKeyword, searchLocation, onResetSea
         {/* Tab Filters and Active Search Info */}
         <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-foreground/10 pb-4">
           <div className="flex flex-wrap gap-1">
-            {tabs.map((tab) => (
+            {TABS.map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
                 className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all border ${
-                  activeTab === tab
+                  activeTab === tab.value
                     ? "bg-brand text-white border-brand"
                     : "bg-secondary/40 text-foreground/75 hover:bg-secondary border-transparent hover:border-foreground/10"
                 }`}
               >
-                {tab}s
+                {tab.label}
               </button>
             ))}
           </div>
@@ -197,10 +119,14 @@ export default function FeaturedJobs({ searchKeyword, searchLocation, onResetSea
           )}
         </div>
 
+        {error && <ErrorAlert title="Could Not Load Jobs" message={error} className="mb-6" />}
+
         {/* Jobs Grid */}
-        {filteredJobs.length > 0 ? (
+        {loading ? (
+          <LoadingSpinner message="Loading opportunities..." />
+        ) : visibleJobs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredJobs.map((job) => (
+            {visibleJobs.map((job) => (
               <Card
                 key={job.id}
                 className="border border-foreground/10 hover:border-brand/40 bg-card hover:shadow-md transition-all duration-300 flex flex-col relative group"
@@ -209,58 +135,36 @@ export default function FeaturedJobs({ searchKeyword, searchLocation, onResetSea
                 <div className="absolute top-0 left-0 right-0 h-1 bg-brand transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
 
                 <CardHeader className="flex flex-row items-start gap-4 pb-4">
-                  {/* Company Logo Badge */}
-                  <div className={`size-12 flex items-center justify-center text-white text-lg font-bold shrink-0 ${job.logoBg}`}>
-                    {job.logoText}
+                  {/* Company initial, since no logo is stored */}
+                  <div className="size-12 flex items-center justify-center bg-brand text-white text-lg font-bold shrink-0">
+                    {companyInitial(job.company.name)}
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <CardTitle className="text-sm font-bold text-foreground group-hover:text-brand transition-colors line-clamp-1">
                       <Link to={`/jobs/${job.id}`} className="hover:underline">
                         {job.title}
                       </Link>
                     </CardTitle>
                     <CardDescription className="text-xs font-semibold text-foreground/80">
-                      <Link to={`/companies/${companyIdMap[job.company] || "google"}`} className="text-brand hover:underline">
-                        {job.company}
+                      <Link to={`/companies/${job.company.id}`} className="text-brand hover:underline">
+                        {job.company.name}
                       </Link>
                     </CardDescription>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4 flex-1">
-                  {/* Job Metadata */}
                   <div className="space-y-2 text-xs text-muted-foreground font-medium">
                     <div className="flex items-center gap-2">
                       <MapPin size={14} className="text-foreground/40" />
                       <span>{job.location}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <CurrencyDollar size={14} className="text-foreground/40" />
-                      <span className="text-foreground font-bold">{job.stipend}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CalendarBlank size={14} className="text-foreground/40" />
-                      <span>Posted {job.posted}</span>
-                    </div>
-                  </div>
-
-                  {/* Skills/Tags */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {job.skills.map((skill) => (
-                      <Badge
-                        key={skill}
-                        variant="outline"
-                        className="rounded-none text-[10px] py-0 px-1.5 border-foreground/15 bg-background font-mono text-muted-foreground"
-                      >
-                        {skill}
-                      </Badge>
-                    ))}
                   </div>
                 </CardContent>
 
                 <CardFooter className="border-t border-foreground/10 bg-secondary/20 group-hover:bg-secondary/40 transition-colors flex justify-between items-center py-3">
                   <Badge className="bg-brand/10 border border-brand/20 text-brand text-[10px] font-bold uppercase tracking-wider rounded-none px-2 py-0.5">
-                    {job.type}
+                    {formatEmploymentType(job.employmentType)}
                   </Badge>
                   <Link to={`/jobs/${job.id}`}>
                     <Button
