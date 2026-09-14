@@ -144,8 +144,10 @@ export class JobDiscoveryService {
                 id: true,
                 title: true,
                 description: true,
+                requirement: true,
                 location: true,
                 employmentType: true,
+                deadline: true,
 
                 company: {
                     select: {
