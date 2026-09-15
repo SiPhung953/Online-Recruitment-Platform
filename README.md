@@ -58,25 +58,110 @@ bachelor-thesis-prj/
 * Application review
 * Moderation/admin management
 
-## Getting Started
+## Installation
 
-Install dependencies:
+Installation guide for reviewers and Defense Council members. It walks through running the platform locally from a clean environment.
+
+### Prerequisites
+
+* **Node.js** 20.19 or newer (LTS recommended)
+* **pnpm** 11.x — enable Corepack (`corepack enable`) or install globally (`npm install -g pnpm`)
+* **PostgreSQL** 14+ running locally
+
+### 1. Extract the project
+
+Unzip the project archive (e.g. `bachelor-thesis-prj.zip`) and open a terminal in the extracted folder:
+
+```bash
+cd bachelor-thesis-prj
+```
+
+### 2. Install dependencies
 
 ```bash
 pnpm install
 ```
 
-Run the frontend:
+This installs the frontend (`apps/web`), the backend (`apps/api`) and all shared tooling in a single pnpm workspace.
+
+### 3. Configure environment variables
+
+The backend loads its configuration from `apps/api/.env`. Create the file:
+
+```bash
+touch apps/api/.env
+```
+
+and fill in the required variables:
+
+```dotenv
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/bachelor_thesis
+JWT_SECRET=change-me-to-a-long-random-string
+FRONTEND_URL=http://localhost:5173
+PORT=3000
+```
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Yes | PostgreSQL connection string, used by both the API and Prisma |
+| `JWT_SECRET` | Yes | Secret used to sign and verify login tokens |
+| `FRONTEND_URL` | Yes | Web app origin (for CORS and password-reset links) |
+| `PORT` | No | API port, defaults to `3000` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | No | SMTP/Gmail credentials for password-reset emails |
+| `PASSWORD_RESET_MESSAGE`, `PASSWORD_RESET_EXPIRY_TIME`, `JOB_EXPIRY_INTERVAL_MS` | No | Optional parameters (reset email text, token lifetime, job-expiry sweep interval) |
+
+The frontend needs no environment variables — it talks to the API at `http://localhost:3000` by default.
+
+### 4. Create the PostgreSQL database
+
+Create an empty database for the project, then make sure `DATABASE_URL` in `apps/api/.env` points to it:
+
+```sql
+CREATE DATABASE bachelor_thesis;
+```
+
+(`createdb bachelor_thesis` or pgAdmin work too.)
+
+### 5. Run database migrations
+
+```bash
+pnpm --filter api exec prisma migrate deploy
+pnpm --filter api exec prisma generate
+```
+
+This applies all committed migrations and regenerates the Prisma client. For a scratch development database, `pnpm --filter api exec prisma migrate reset` re-creates everything from scratch instead.
+
+### 6. Seed demo data (optional)
+
+```bash
+pnpm --filter api seed
+```
+
+Seeds the roles plus three demo employers with companies and `ACTIVE` job postings. All seeded accounts use the password `Password123!`:
+
+| Email | Role |
+| :--- | :--- |
+| `hr@fptsoftware.demo` | Employer (FPT Software) |
+| `talent@vnglab.demo` | Employer (VNG Lab) |
+| `careers@hanoidata.demo` | Employer (Hanoi Data Collective) |
+
+### 7. Start the backend
+
+```bash
+pnpm dev:api
+```
+
+Runs on http://localhost:3000. Interactive API documentation (Swagger UI) is available at http://localhost:3000/docs.
+
+### 8. Start the frontend
+
+In a second terminal:
 
 ```bash
 pnpm dev:web
 ```
 
-Run the backend:
-
-```bash
-pnpm dev:api
-```
+Runs on http://localhost:5173. Open it in a browser and register a Job Seeker account, or log in with one of the seeded employer accounts above.
 
 ## API Documentation
 
