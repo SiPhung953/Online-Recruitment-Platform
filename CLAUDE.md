@@ -36,6 +36,9 @@ pnpm --filter web dev       # Vite dev server
 pnpm --filter web generate:api                              # regenerate the API client from swagger.json
 pnpm --filter api exec prisma migrate dev --name <name>     # schema change
 pnpm --filter api seed                                      # demo data (idempotent)
+pnpm --filter api test                                      # vitest — the whole suite, ~30s
+pnpm --filter api test:watch                                # watch mode while writing tests
+pnpm --filter api test:types                                # typecheck the suite
 ```
 
 Typecheck without running the generator: `node_modules/.bin/tsc -p apps/api --noEmit`.
@@ -54,6 +57,18 @@ HTTP → generated/routes.ts → Controller (tsoa decorators) → Service (busin
   - Two invariants worth keeping: the weights in `SCORING_WEIGHTS` sum to 1, so a score is always in `[0, 1]` and each weight reads directly as "what this signal is worth"; and **a job with an empty `reasons` is never recommended** — the caller filters on that rather than on `score > 0`, because the recency term gives every job a small non-zero score, so ranking by score alone would just be "newest first" in disguise.
   - The response's `basis` field (`PREFERENCES` / `LATEST` / `NOT_LOOKING`) is what lets the dashboard describe the list honestly instead of labelling everything "recommended".
 - A scheduled/background task is just a second caller of the same Service method; put the logic in a service, not in the timer callback.
+
+## Testing
+
+Vitest plus supertest, in `apps/api/tests/`. `pnpm --filter api test` runs 89 cases in about 30 seconds: `tests/unit/` covers the recommendation algorithm with no database at all, and `tests/integration/` drives the real Express app through `supertest(app)` against a real PostgreSQL database — one file per actor, plus the expiry sweep.
+
+- **The test database is derived, never configured.** `tests/setup/TestDatabaseUrl.ts` appends `_test` to `DATABASE_URL`, so `mydb` becomes `mydb_test`. That derivation is the safety catch, not a convenience: `resetDatabase()` truncates every table before each case, so a hand-set connection string pointing at the development database would destroy it. `GlobalSetup.ts` creates the database and runs `prisma migrate deploy` against it once per run, which means the suite exercises the real migrations rather than a `db push` of the schema.
+- **`fileParallelism: false` is load-bearing.** Seven files truncating one database cannot run concurrently. Remove it and the suite fails in ways that do not reproduce when a file is run alone.
+- **Fixtures write rows and mint tokens directly** (`tests/setup/Fixtures.ts`), instead of driving register → login → create-company → post-job. A test about applying for a job should fail only when applying is broken; if its setup went through four endpoints, a defect in any of them would fail it too and the report would point at the wrong place. The flows that build state have their own tests.
+- **`tsconfig.test.json` exists because Vitest transpiles with esbuild, which strips types without checking them.** Without `pnpm --filter api test:types`, a type error in a test is reported by nothing. The base `tsconfig.json` cannot simply be widened to include `tests/`, or the tests would land in `dist/`.
+- **Tests assert status codes, not error bodies.** `app.ts` registers no error-handling middleware, so a thrown `HttpError` reaches Express's default handler — which honours `err.status` but renders HTML. There is no JSON error contract to assert against.
+
+Two things the suite pinned down that were previously only claims: the expiry sweep really does move `ACTIVE → EXPIRED` and log it with a null actor, and a ban really does invalidate a token the user is already holding.
 
 ## Conventions
 
@@ -86,7 +101,7 @@ Length caps are `400`, not `413`. Ownership checks are 404-then-403.
 
 ## Known gaps
 
-- **Job expiry is enforced two ways, on purpose.** The four public reads (`JobDiscoveryService.searchJobs` / `.getJobDetail`, `CompanyProfileService`, `ApplicationService.applyJob`) each check `deadline` directly, so UC-EMP-01 holds the instant a deadline lapses rather than whenever a sweep last ran. `JobExpiryService` then writes `status: "EXPIRED"` so the stored value agrees — that is what the Employer list, the moderation screens and `/admin/logs` read from. The sweep touches **only `ACTIVE`**: expiring a `PENDING_APPROVAL` posting would strand it, since a Moderator already cannot approve a lapsed job and `EXPIRED` is not editable, leaving the Employer no way to set a new deadline. `CLOSED` is left alone too, because re-opening already demands a future deadline. Expiry is one-way — restoring a deadline does not bring a posting back; that is `updateJobPosting`'s job.
+- **Job expiry is enforced two ways, on purpose.** The four public reads (`JobDiscoveryService.searchJobs` / `.getJobDetail`, `CompanyProfileService`, `ApplicationService.applyJob`) each check `deadline` directly, so UC-EMP-01 holds the instant a deadline lapses rather than whenever a sweep last ran. `JobExpiryService` then writes `status: "EXPIRED"` so the stored value agrees — that is what the Employer list, the moderation screens and `/admin/logs` read from. The sweep touches **only `ACTIVE`**: expiring a `PENDING_APPROVAL` posting would strand it, since a Moderator already cannot approve a lapsed job and `EXPIRED` is not editable, leaving the Employer no way to set a new deadline. `CLOSED` is left alone too, because re-opening already demands a future deadline. **Expiry is terminal.** `EXPIRED` is not in `updateJobPosting`'s `EDITABLE_STATUSES` (`PENDING_APPROVAL`, `ACTIVE`, `REJECTED`, `CLOSED`), so a lapsed posting cannot be given a new deadline — editing it returns 400. The only transition left to it is deletion, and an Employer who wants the role advertised again has to create a new posting. Whether that is the intended trade is worth a decision; it is currently the behaviour, and a test pins it.
 - `AuditLogger` (in `src/logging/`) now records every mutation across moderation, employer jobs, company, auth, profile, resumes, and applications: each system write and its `Log` row commit in the same interactive `prisma.$transaction`, so a job can't be created with no log (or logged without creating). Standalone events (login) use `logStandalone`. Both former gaps are closed: `logoutUser` is now `@Security("jwt")` so `USER_LOGGED_OUT` has an actor, and UC-ADMIN-05 is live as `AuditLogController` plus `/admin/logs`.
 
 - **Uploaded files are served without authentication — an accepted MVP limitation, not an oversight.** `app.ts` mounts `express.static` at `/uploads` with no auth in front of it, so `ResumeDto.fileUrl` / `EmployerApplicationResponse.resumeFileUrl` / `avatarUrl` are plain paths the browser fetches directly. UC-EMP-06 says an employer may see only the CV attached to that application — a rule the API enforces and the file server does not, so a URL, once seen, keeps working forever and can be forwarded. Closing it means a token-checking download route, which the browser cannot use from `<img src>` or `<a href>` without also changing how the frontend fetches files. Recorded as a scope cut in the use-case document under UC-EMP-06.
