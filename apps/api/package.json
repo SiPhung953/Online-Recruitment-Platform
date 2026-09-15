@@ -10,7 +10,11 @@
     "build": "tsoa spec-and-routes && tsc && shx mkdir -p dist/email/templates && shx cp -r src/email/templates/. dist/email/templates/",
     "start": "node dist/server.js",
     "lint": "eslint .",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "pretest": "tsoa spec-and-routes",
+    "test": "vitest run",
+    "test:types": "tsc -p tsconfig.test.json",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -39,13 +43,16 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^24.12.4",
     "@types/nodemailer": "^8.0.0",
+    "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^10.4.0",
     "globals": "^17.6.0",
     "prisma": "^7.8.0",
     "shx": "^0.4.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.22.3",
-    "typescript-eslint": "^8.60.0"
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^3.2.7"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

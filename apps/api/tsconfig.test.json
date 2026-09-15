@@ -1,0 +1,21 @@
+{
+  // Typechecking for the test suite.
+  //
+  // `tsconfig.json` compiles `src` to `dist` and must not be widened to cover
+  // `tests`, or the tests would ship inside the build output. Vitest itself
+  // transpiles with esbuild, which strips types without checking them — so
+  // without this config a type error in a test is never reported by anything.
+  //
+  // The module settings differ from the base config on purpose: Vitest runs
+  // these files as ES modules, which is what makes `import.meta.url` in
+  // `tests/setup/GlobalSetup.ts` legal.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}
